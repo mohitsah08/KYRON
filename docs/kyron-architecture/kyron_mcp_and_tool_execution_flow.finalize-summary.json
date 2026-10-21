@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "command": "finalize",
+  "status": "pass",
+  "type": "sequence",
+  "quality": "showcase",
+  "specification": {
+    "path": "/Users/onlymec/Documents/Project V/KYARON/KYRON/docs/kyron-architecture/KYRON_MCP_AND_TOOL_EXECUTION_FLOW.sequence.json",
+    "sha256": "b37ff4e231fbf7eeee94fba5d6f086d89331b347affafb54e63b5c83d09bd350",
+    "bytes": 5092
+  },
+  "artifact": {
+    "path": "/Users/onlymec/Documents/Project V/KYARON/KYRON/docs/kyron-architecture/KYRON_MCP_AND_TOOL_EXECUTION_FLOW.html",
+    "sha256": "47fea86ef62a6cc0a0c5f94c7abe9bec1ebea55dd2030718d4b5a2de265366bc",
+    "bytes": 762089
+  },
+  "gates": {
+    "validate": "pass",
+    "deliver": "pass",
+    "check": "pass",
+    "browser-check": "pass"
+  },
+  "diagnostics": [],
+  "diagnosticSummary": {
+    "total": 0,
+    "shown": 0,
+    "truncated": false
+  },
+  "evidence": {
+    "receipt": "/Users/onlymec/Documents/Project V/KYARON/KYRON/docs/kyron-architecture/kyron_mcp_and_tool_execution_flow.finalize.json",
+    "summaryReceipt": "/Users/onlymec/Documents/Project V/KYARON/KYRON/docs/kyron-architecture/kyron_mcp_and_tool_execution_flow.finalize-summary.json",
+    "browserCheckReceipt": "/Users/onlymec/Documents/Project V/KYARON/KYRON/docs/kyron-architecture/kyron_mcp_and_tool_execution_flow.browser-check.json"
+  },
+  "visualReview": "not-requested",
+  "durationMs": 7459
+}

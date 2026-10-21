@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "d2b2756c-dbf2-4c99-9b44-d3c8be6e628b",
+  "status": "current",
+  "command": "deliver",
+  "type": "architecture",
+  "input": "/Users/onlymec/Documents/Project V/KYARON/KYRON/docs/kyron-architecture/KYRON_SECURITY_AND_DATA_FLOW.architecture.json",
+  "output": "/Users/onlymec/Documents/Project V/KYARON/KYRON/docs/kyron-architecture/KYRON_SECURITY_AND_DATA_FLOW.html",
+  "specification": {
+    "sha256": "3d4962232121af185d39aa162a598807608cbf13a37bec879475e57e93802660",
+    "bytes": 8113
+  },
+  "artifact": {
+    "sha256": "0a44c0776fb8dd30649b2515236193c3627303d82b05074e2694744c623d405f",
+    "bytes": 775539
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "c53630ae-9a1e-49f4-a473-545b0bb3ad62",
+  "status": "current",
+  "command": "deliver",
+  "type": "sequence",
+  "input": "/Users/onlymec/Documents/Project V/KYARON/KYRON/docs/kyron-architecture/KYRON_MCP_AND_TOOL_EXECUTION_FLOW.sequence.json",
+  "output": "/Users/onlymec/Documents/Project V/KYARON/KYRON/docs/kyron-architecture/KYRON_MCP_AND_TOOL_EXECUTION_FLOW.html",
+  "specification": {
+    "sha256": "b37ff4e231fbf7eeee94fba5d6f086d89331b347affafb54e63b5c83d09bd350",
+    "bytes": 5092
+  },
+  "artifact": {
+    "sha256": "47fea86ef62a6cc0a0c5f94c7abe9bec1ebea55dd2030718d4b5a2de265366bc",
+    "bytes": 762089
+  }
+}

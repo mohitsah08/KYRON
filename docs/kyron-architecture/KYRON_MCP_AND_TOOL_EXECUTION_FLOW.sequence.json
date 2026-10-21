@@ -1,0 +1,219 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "KYRON MCP Protocol & Tool Execution Flow",
+    "subtitle": "Autonomous Agent Interaction: JSON-RPC 2.0 Transport, Entitlement Verification & Tool Execution",
+    "output": "docs/kyron-architecture/KYRON_MCP_AND_TOOL_EXECUTION_FLOW.html",
+    "visual_preset": "editorial",
+    "quality_profile": "showcase",
+    "animation": "trace",
+    "column_fit": "spread"
+  },
+  "participants": [
+    {
+      "id": "agent",
+      "type": "external",
+      "label": "AI Agent Client",
+      "sublabel": "Claude / Cursor / IDE"
+    },
+    {
+      "id": "proxy",
+      "type": "cloud",
+      "label": "Vite Proxy",
+      "sublabel": "Edge Gateway :5173"
+    },
+    {
+      "id": "mcp_gw",
+      "type": "messagebus",
+      "label": "MCP Gateway",
+      "sublabel": "server/routes/mcp.ts"
+    },
+    {
+      "id": "auth_mw",
+      "type": "security",
+      "label": "Auth Validator",
+      "sublabel": "JWT Bearer Gate"
+    },
+    {
+      "id": "tool_dsp",
+      "type": "backend",
+      "label": "Tool Dispatcher",
+      "sublabel": "5 Native Handlers"
+    },
+    {
+      "id": "sqlite",
+      "type": "database",
+      "label": "SQLite Storage",
+      "sublabel": "data/kyron.sqlite"
+    }
+  ],
+  "segments": [
+    {
+      "from": 155,
+      "to": 312,
+      "label": "1. Tool Discovery & Handshake"
+    },
+    {
+      "from": 324,
+      "to": 450,
+      "label": "2. Autonomous Catalog Discovery"
+    },
+    {
+      "from": 462,
+      "to": 690,
+      "label": "3. Installation, Entitlement & Execution"
+    }
+  ],
+  "messages": [
+    {
+      "id": "m1",
+      "from": "agent",
+      "to": "proxy",
+      "y": 170,
+      "label": "POST /mcp (tools/list)",
+      "variant": "default"
+    },
+    {
+      "id": "m2",
+      "from": "proxy",
+      "to": "mcp_gw",
+      "y": 202,
+      "label": "Forward to :3000",
+      "variant": "emphasis"
+    },
+    {
+      "id": "m3",
+      "from": "mcp_gw",
+      "to": "tool_dsp",
+      "y": 234,
+      "label": "Inspect Tool Registry",
+      "variant": "default"
+    },
+    {
+      "id": "m4",
+      "from": "tool_dsp",
+      "to": "mcp_gw",
+      "y": 266,
+      "label": "5 Tool Schemas (JSON-RPC)",
+      "variant": "default"
+    },
+    {
+      "id": "m5",
+      "from": "mcp_gw",
+      "to": "agent",
+      "y": 298,
+      "label": "200 OK (tools: search, install...)",
+      "variant": "emphasis"
+    },
+    {
+      "id": "m6",
+      "from": "agent",
+      "to": "mcp_gw",
+      "y": 340,
+      "label": "tools/call search_skills",
+      "variant": "default"
+    },
+    {
+      "id": "m7",
+      "from": "mcp_gw",
+      "to": "sqlite",
+      "y": 372,
+      "label": "Query skills & deals",
+      "variant": "default"
+    },
+    {
+      "id": "m8",
+      "from": "sqlite",
+      "to": "mcp_gw",
+      "y": 404,
+      "label": "Return Matching Skills",
+      "variant": "default"
+    },
+    {
+      "id": "m9",
+      "from": "mcp_gw",
+      "to": "agent",
+      "y": 436,
+      "label": "Structured Skill Metadata",
+      "variant": "emphasis"
+    },
+    {
+      "id": "m10",
+      "from": "agent",
+      "to": "mcp_gw",
+      "y": 478,
+      "label": "tools/call install_skill",
+      "variant": "security"
+    },
+    {
+      "id": "m11",
+      "from": "mcp_gw",
+      "to": "auth_mw",
+      "y": 510,
+      "label": "Validate Bearer Token",
+      "variant": "security"
+    },
+    {
+      "id": "m12",
+      "from": "auth_mw",
+      "to": "sqlite",
+      "y": 542,
+      "label": "Check user_purchases Entitlement",
+      "variant": "security"
+    },
+    {
+      "id": "m13",
+      "from": "sqlite",
+      "to": "tool_dsp",
+      "y": 574,
+      "label": "Entitlement Verified",
+      "variant": "default"
+    },
+    {
+      "id": "m14",
+      "from": "agent",
+      "to": "mcp_gw",
+      "y": 606,
+      "label": "tools/call execute_skill_workflow",
+      "variant": "emphasis"
+    },
+    {
+      "id": "m15",
+      "from": "mcp_gw",
+      "to": "tool_dsp",
+      "y": 638,
+      "label": "Run Command (/geo quick ...)",
+      "variant": "emphasis"
+    },
+    {
+      "id": "m16",
+      "from": "tool_dsp",
+      "to": "agent",
+      "y": 670,
+      "label": "Return Structured Agent Findings",
+      "variant": "emphasis"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Model Context Protocol Transport",
+      "items": [
+        "Compliant with Anthropic Model Context Protocol specification v2024-11-05",
+        "Streamable JSON-RPC 2.0 transport served concurrently on /mcp and /api/mcp",
+        "Agents connect via single config entry: npx -y mcp-proxy http://localhost:5173/api/mcp"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Autonomous Tool Capabilities",
+      "items": [
+        "search_skills: Natural language discovery of workflows, rules, and scripts",
+        "get_skill_details: Complete playbook retrieval with verified security rating",
+        "install_skill: Policy-gated package acquisition and runtime activation",
+        "execute_skill_workflow: Safe execution of verified CLI actions and playbooks"
+      ]
+    }
+  ]
+}

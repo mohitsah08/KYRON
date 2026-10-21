@@ -1,0 +1,516 @@
+<svg viewBox="0 0 1540 736" role="img" lang="en" aria-labelledby="archify-diagram-title archify-diagram-description" data-preset="editorial" data-quality-profile="showcase" data-reader-fit="intrinsic-height" data-reader-min-text="7.5" data-reader-primary-text="14">
+        <title id="archify-diagram-title">KYRON System Architecture — Production Specification</title>
+        <desc id="archify-diagram-description">AI Agent Skill.md Marketplace, AST Threat Scanner &amp; Model Context Protocol (MCP) Gateway</desc>
+        <!-- Definitions -->
+        <defs>
+          <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" class="m-default" />
+          </marker>
+          <marker id="arrowhead-emphasis" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" class="m-emphasis" />
+          </marker>
+          <marker id="arrowhead-security" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" class="m-security" />
+          </marker>
+          <marker id="arrowhead-dashed" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" class="m-dashed" />
+          </marker>
+          <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+            <path d="M 40 0 L 0 0 0 40" class="c-grid" stroke-width="0.5"/>
+          </pattern>
+        </defs>
+
+        <!-- Background Grid -->
+        <rect width="100%" height="100%" fill="url(#grid)" />
+
+        <!-- Boundaries (behind everything) -->
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="0" data-composition-frame-label="External Clients &amp; AI Agent Ecosystem" x="25.716117932258072" y="130" width="238.56776413548386" height="438" rx="12" class="c-region" stroke-width="1"/>
+
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="1" data-composition-frame-label="Client Presentation Tier (React 19 SPA)" x="262.25482700967746" y="70" width="250.49034598064515" height="598" rx="12" class="c-region" stroke-width="1"/>
+
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="security-group" data-composition-frame-id="2" data-composition-frame-label="Edge Gateway &amp; Routing Tier" x="520" y="250" width="225" height="278" rx="8" class="c-security-group" stroke-width="1"/>
+
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="3" data-composition-frame-label="KYRON Core Application &amp; Domain Services (Express 4)" x="713.5064360129032" y="70" width="327.9871279741935" height="598" rx="12" class="c-region" stroke-width="1"/>
+
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="security-group" data-composition-frame-id="4" data-composition-frame-label="Security Threat Engine &amp; Autonomous Tool Dispatch" x="972.4483723967742" y="170" width="310.1032552064516" height="438" rx="8" class="c-security-group" stroke-width="1"/>
+
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="5" data-composition-frame-label="SQLite Persistence Tier (WAL)" x="1260" y="130" width="240" height="438" rx="12" class="c-region" stroke-width="1"/>
+
+        <!-- Connection paths (before components for correct z-order) -->
+        <g data-graph-role="automatic-crossover" style="--step:0">
+          <path data-graph-role="automatic-crossover-underlay" d="M 230 194 L 257 194 Q 265 194 265 202 L 265 246 Q 265 254 273 254 L 300 254" fill="none" stroke="var(--mask)" stroke-width="5.8" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="ext_browser" data-edge-to="ui_detail_buy" data-edge-label="User Interaction" data-edge-key="0" data-edge-id="e1" data-composition-points="230,194;265,194;265,254;300,254" data-composition-crossover="halo" data-composition-independent="true" d="M 230 194 L 257 194 Q 265 194 265 202 L 265 246 Q 265 254 273 254 L 300 254" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        </g>
+        <g data-graph-role="automatic-crossover" style="--step:1">
+          <path data-graph-role="automatic-crossover-underlay" d="M 230 354 L 257 354 Q 265 354 265 362 L 265 486 Q 265 494 273 494 L 300 494" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="ext_agent_ide" data-edge-to="ui_mcp_hub" data-edge-label="Inspect MCP Spec" data-edge-key="1" data-edge-id="e2" data-composition-points="230,354;265,354;265,494;300,494" data-composition-crossover="halo" data-composition-independent="true" d="M 230 354 L 257 354 Q 265 354 265 362 L 265 486 Q 265 494 273 494 L 300 494" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        </g>
+        <g data-graph-role="automatic-crossover" style="--step:2">
+          <path data-graph-role="automatic-crossover-underlay" d="M 230 514 L 257 514 Q 265 514 265 522 L 265 606 Q 265 614 273 614 L 300 614" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="ext_mock_stripe" data-edge-to="ui_auth_context" data-edge-label="Credit Simulation" data-edge-key="2" data-edge-id="e3" data-composition-points="230,514;265,514;265,614;300,614" data-composition-crossover="halo" data-composition-independent="true" d="M 230 514 L 257 514 Q 265 514 265 522 L 265 606 Q 265 614 273 614 L 300 614" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
+        </g>
+        <g data-graph-role="automatic-crossover" style="--step:3">
+          <path data-graph-role="automatic-crossover-underlay" d="M 475 254 L 504.5 254 Q 512.5 254 512.5 262 L 512.5 306 Q 512.5 314 520.5 314 L 550 314" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="ui_detail_buy" data-edge-to="vite_dev_proxy" data-edge-label="HTTP Requests" data-edge-key="3" data-edge-id="e4" data-composition-points="475,254;512.5,254;512.5,314;550,314" data-composition-crossover="halo" data-composition-independent="true" d="M 475 254 L 504.5 254 Q 512.5 254 512.5 262 L 512.5 306 Q 512.5 314 520.5 314 L 550 314" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        </g>
+        <g data-graph-role="automatic-crossover" style="--step:4">
+          <path data-graph-role="automatic-crossover-underlay" d="M 475 614 L 504.5 614 Q 512.5 614 512.5 606 L 512.5 482 Q 512.5 474 520.5 474 L 550 474" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="ui_auth_context" data-edge-to="auth_middleware" data-edge-label="Bearer JWT" data-edge-key="4" data-edge-id="e5" data-composition-points="475,614;512.5,614;512.5,474;550,474" data-composition-crossover="halo" data-composition-independent="true" d="M 475 614 L 504.5 614 Q 512.5 614 512.5 606 L 512.5 482 Q 512.5 474 520.5 474 L 550 474" class="a-security" stroke-width="1.5" marker-end="url(#arrowhead-security)"/>
+        </g>
+        <g data-graph-role="automatic-crossover" style="--step:5">
+          <path data-graph-role="automatic-crossover-underlay" d="M 715 305.95 L 790 305.95" fill="none" stroke="var(--mask)" stroke-width="5.8" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="vite_dev_proxy" data-edge-to="express_server" data-edge-label="Proxy to :3000" data-edge-key="5" data-edge-id="e6" data-composition-points="715,305.95;790,305.95" data-composition-crossover="halo" data-composition-independent="true" d="M 715 305.95 L 790 305.95" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        </g>
+        <g data-graph-role="automatic-crossover" style="--step:6">
+          <path data-graph-role="automatic-crossover-underlay" d="M 715 474 L 744.5 474 Q 752.5 474 752.5 466 L 752.5 329 Q 752.5 321 760.5 321 L 790 321" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="auth_middleware" data-edge-to="express_server" data-edge-label="User Session" data-edge-key="6" data-edge-id="e7" data-composition-points="715,474;752.5,474;752.5,321;790,321" data-composition-crossover="halo" data-composition-independent="true" d="M 715 474 L 744.5 474 Q 752.5 474 752.5 466 L 752.5 329 Q 752.5 321 760.5 321 L 790 321" class="a-security" stroke-width="1.5" marker-end="url(#arrowhead-security)"/>
+        </g>
+        <g data-graph-role="automatic-crossover" style="--step:7">
+          <path data-graph-role="automatic-crossover-underlay" d="M 877.5 280 L 877.5 168" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="express_server" data-edge-to="svc_skills" data-edge-label="/api/skills" data-edge-key="7" data-edge-id="e8" data-composition-points="877.5,280;877.5,168" data-composition-crossover="halo" data-composition-independent="true" d="M 877.5 280 L 877.5 168" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        </g>
+        <g data-graph-role="automatic-crossover" style="--step:8">
+          <path data-graph-role="automatic-crossover-underlay" d="M 885.55 348 L 885.55 440" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="express_server" data-edge-to="svc_creator" data-edge-label="/api/creator" data-edge-key="8" data-edge-id="e9" data-composition-points="885.55,348;885.55,440" data-composition-crossover="halo" data-composition-independent="true" d="M 885.55 348 L 885.55 440" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        </g>
+        <g data-graph-role="automatic-crossover" style="--step:9">
+          <path data-graph-role="automatic-crossover-underlay" d="M 870.5 348 L 870.5 364 Q 870.5 372 862.5 372 L 795 372 Q 787 372 787 380 L 787 548 Q 787 556 795 556 L 869.5 556 Q 877.5 556 877.5 564 L 877.5 580" fill="none" stroke="var(--mask)" stroke-width="5.8" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="express_server" data-edge-to="mcp_gateway" data-edge-label="/api/mcp" data-edge-key="9" data-edge-id="e10" data-composition-points="870.5,348;870.5,372;787,372;787,556;877.5,556;877.5,580" data-composition-crossover="halo" data-composition-independent="true" d="M 870.5 348 L 870.5 364 Q 870.5 372 862.5 372 L 795 372 Q 787 372 787 380 L 787 548 Q 787 556 795 556 L 869.5 556 Q 877.5 556 877.5 564 L 877.5 580" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        </g>
+        <g data-graph-role="automatic-crossover" style="--step:10">
+          <path data-graph-role="automatic-crossover-underlay" d="M 965 314 L 994.5 314 Q 1002.5 314 1002.5 306 L 1002.5 242 Q 1002.5 234 1010.5 234 L 1040 234" fill="none" stroke="var(--mask)" stroke-width="5.8" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="express_server" data-edge-to="svc_purchases" data-edge-label="Purchase Flow" data-edge-key="10" data-edge-id="e11" data-composition-points="965,314;1002.5,314;1002.5,234;1040,234" data-composition-crossover="halo" data-composition-independent="true" d="M 965 314 L 994.5 314 Q 1002.5 314 1002.5 306 L 1002.5 242 Q 1002.5 234 1010.5 234 L 1040 234" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        </g>
+        <g data-graph-role="automatic-crossover" style="--step:11">
+          <path data-graph-role="automatic-crossover-underlay" d="M 965 474 L 994.5 474 Q 1002.5 474 1002.5 466 L 1002.5 402 Q 1002.5 394 1010.5 394 L 1040 394" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="svc_creator" data-edge-to="sec_scanner" data-edge-label="AST Threat Scan" data-edge-key="11" data-edge-id="e12" data-composition-points="965,474;1002.5,474;1002.5,394;1040,394" data-composition-crossover="halo" data-composition-independent="true" d="M 965 474 L 994.5 474 Q 1002.5 474 1002.5 466 L 1002.5 402 Q 1002.5 394 1010.5 394 L 1040 394" class="a-security" stroke-width="1.5" marker-end="url(#arrowhead-security)"/>
+        </g>
+        <g data-graph-role="automatic-crossover" style="--step:12">
+          <path data-graph-role="automatic-crossover-underlay" d="M 965 614 L 994.5 614 Q 1002.5 614 1002.5 606 L 1002.5 562 Q 1002.5 554 1010.5 554 L 1040 554" fill="none" stroke="var(--mask)" stroke-width="5.8" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="mcp_gateway" data-edge-to="mcp_tools" data-edge-label="tools/call" data-edge-key="12" data-edge-id="e13" data-composition-points="965,614;1002.5,614;1002.5,554;1040,554" data-composition-crossover="halo" data-composition-independent="true" d="M 965 614 L 994.5 614 Q 1002.5 614 1002.5 606 L 1002.5 562 Q 1002.5 554 1010.5 554 L 1040 554" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        </g>
+        <g data-graph-role="automatic-crossover" style="--step:13">
+          <path data-graph-role="automatic-crossover-underlay" d="M 1215 234 L 1244.5 234 Q 1252.5 234 1252.5 226 L 1252.5 202 Q 1252.5 194 1260.5 194 L 1290 194" fill="none" stroke="var(--mask)" stroke-width="5.8" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="svc_purchases" data-edge-to="db_sqlite" data-edge-label="Balance Deduct" data-edge-key="13" data-edge-id="e14" data-composition-points="1215,234;1252.5,234;1252.5,194;1290,194" data-composition-crossover="halo" data-composition-independent="true" d="M 1215 234 L 1244.5 234 Q 1252.5 234 1252.5 226 L 1252.5 202 Q 1252.5 194 1260.5 194 L 1290 194" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        </g>
+        <g data-graph-role="automatic-crossover" style="--step:14">
+          <path data-graph-role="automatic-crossover-underlay" d="M 1215 394 L 1244.5 394 Q 1252.5 394 1252.5 386 L 1252.5 362 Q 1252.5 354 1260.5 354 L 1290 354" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="sec_scanner" data-edge-to="db_core_tables" data-edge-label="Audit Findings" data-edge-key="14" data-edge-id="e15" data-composition-points="1215,394;1252.5,394;1252.5,354;1290,354" data-composition-crossover="halo" data-composition-independent="true" d="M 1215 394 L 1244.5 394 Q 1252.5 394 1252.5 386 L 1252.5 362 Q 1252.5 354 1260.5 354 L 1290 354" class="a-security" stroke-width="1.5" marker-end="url(#arrowhead-security)"/>
+        </g>
+        <g data-graph-role="automatic-crossover" style="--step:15">
+          <path data-graph-role="automatic-crossover-underlay" d="M 1215 554 L 1244.5 554 Q 1252.5 554 1252.5 546 L 1252.5 522 Q 1252.5 514 1260.5 514 L 1290 514" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="mcp_tools" data-edge-to="db_ledger_tables" data-edge-label="Package Access" data-edge-key="15" data-edge-id="e16" data-composition-points="1215,554;1252.5,554;1252.5,514;1290,514" data-composition-crossover="halo" data-composition-independent="true" d="M 1215 554 L 1244.5 554 Q 1252.5 554 1252.5 546 L 1252.5 522 Q 1252.5 514 1260.5 514 L 1290 514" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        </g>
+        <g data-graph-role="automatic-crossover" style="--step:16">
+          <path data-graph-role="automatic-crossover-underlay" d="M 1380 228 L 1380 320" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="db_sqlite" data-edge-to="db_core_tables" data-edge-label="Manage Schema" data-edge-key="16" data-edge-id="e17" data-composition-points="1380,228;1380,320" data-composition-crossover="halo" data-composition-independent="true" d="M 1380 228 L 1380 320" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        </g>
+        <g data-graph-role="automatic-crossover" style="--step:17">
+          <path data-graph-role="automatic-crossover-underlay" d="M 1380 388 L 1380 480" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="db_core_tables" data-edge-to="db_ledger_tables" data-edge-label="FK Constraints" data-edge-key="17" data-edge-id="e18" data-composition-points="1380,388;1380,480" data-composition-crossover="halo" data-composition-independent="true" d="M 1380 388 L 1380 480" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        </g>
+
+        <!-- Components -->
+        <g id="node-ext_browser" data-node-id="ext_browser" data-node-label="Developer &amp; Buyer Browser" tabindex="0" role="button" aria-label="Focus Developer &amp; Buyer Browser, Desktop &amp; Mobile Chrome/Safari, External Clients &amp; AI Agent Ecosystem" aria-pressed="false" data-node-kind="external" data-node-sublabel="Desktop &amp; Mobile Chrome/Safari" data-node-tag="HTTPS Client" data-node-context="External Clients &amp; AI Agent Ecosystem">
+          <title>Developer &amp; Buyer Browser · Desktop &amp; Mobile Chrome/Safari · External Clients &amp; AI Agent Ecosystem · HTTPS Client</title>
+          <rect x="60" y="160" width="170" height="68" rx="6" class="c-mask"/>
+          <rect x="60" y="160" width="170" height="68" rx="6" class="c-external" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(66 166) scale(0.6875)">
+            <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
+            <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="145" y="192" class="t-primary" font-size="10.8" font-weight="600" text-anchor="middle">Developer &amp; Buyer Browser</text>
+        <text data-detail="context" x="145" y="208" class="t-muted" font-size="9" text-anchor="middle">Desktop &amp; Mobile Chrome/Safari</text>
+        <text data-detail="fine" x="145" y="220" class="t-external" font-size="7" text-anchor="middle">HTTPS Client</text>
+        </g>
+
+        <g id="node-ext_agent_ide" data-node-id="ext_agent_ide" data-node-label="AI Agent Runtimes" tabindex="0" role="button" aria-label="Focus AI Agent Runtimes, Claude Code / Cursor / Codex, External Clients &amp; AI Agent Ecosystem" aria-pressed="false" data-node-kind="messagebus" data-node-sublabel="Claude Code / Cursor / Codex" data-node-tag="JSON-RPC Client" data-node-context="External Clients &amp; AI Agent Ecosystem">
+          <title>AI Agent Runtimes · Claude Code / Cursor / Codex · External Clients &amp; AI Agent Ecosystem · JSON-RPC Client</title>
+          <rect x="60" y="320" width="170" height="68" rx="6" class="c-mask"/>
+          <rect x="60" y="320" width="170" height="68" rx="6" class="c-messagebus" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="messagebus" class="semantic-sigil s-messagebus" transform="translate(66 326) scale(0.6875)">
+            <path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/>
+            <circle cx="5" cy="4.5" r="1" class="sigil-fill"/>
+            <circle cx="10.5" cy="8" r="1" class="sigil-fill"/>
+            <circle cx="7" cy="11.5" r="1" class="sigil-fill"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="145" y="352" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">AI Agent Runtimes</text>
+        <text data-detail="context" x="145" y="368" class="t-muted" font-size="9" text-anchor="middle">Claude Code / Cursor / Codex</text>
+        <text data-detail="fine" x="145" y="380" class="t-messagebus" font-size="7" text-anchor="middle">JSON-RPC Client</text>
+        </g>
+
+        <g id="node-ext_mock_stripe" data-node-id="ext_mock_stripe" data-node-label="Credit Topup Simulator" tabindex="0" role="button" aria-label="Focus Credit Topup Simulator, CreditModal (Sandbox Balance), External Clients &amp; AI Agent Ecosystem" aria-pressed="false" data-node-kind="cloud" data-node-sublabel="CreditModal (Sandbox Balance)" data-node-tag="MOCK Topup" data-node-context="External Clients &amp; AI Agent Ecosystem">
+          <title>Credit Topup Simulator · CreditModal (Sandbox Balance) · External Clients &amp; AI Agent Ecosystem · MOCK Topup</title>
+          <rect x="60" y="480" width="170" height="68" rx="6" class="c-mask"/>
+          <rect x="60" y="480" width="170" height="68" rx="6" class="c-cloud" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="cloud" class="semantic-sigil s-cloud" transform="translate(66 486) scale(0.6875)">
+            <path d="M4.3 12.5h7.3a2.4 2.4 0 0 0 .2-4.8 4 4 0 0 0-7.5-1.3A3.1 3.1 0 0 0 4.3 12.5Z"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="145" y="512" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Credit Topup Simulator</text>
+        <text data-detail="context" x="145" y="528" class="t-muted" font-size="9" text-anchor="middle">CreditModal (Sandbox Balance)</text>
+        <text data-detail="fine" x="145" y="540" class="t-cloud" font-size="7" text-anchor="middle">MOCK Topup</text>
+        </g>
+
+        <g id="node-ui_catalog" data-node-id="ui_catalog" data-node-label="Catalog &amp; Search Views" tabindex="0" role="button" aria-label="Focus Catalog &amp; Search Views, HomePage.tsx &amp; SkillsPage.tsx, Client Presentation Tier (React 19 SPA)" aria-pressed="false" data-node-kind="frontend" data-node-sublabel="HomePage.tsx &amp; SkillsPage.tsx" data-node-tag="Instant Category Filtering" data-node-context="Client Presentation Tier (React 19 SPA)">
+          <title>Catalog &amp; Search Views · HomePage.tsx &amp; SkillsPage.tsx · Client Presentation Tier (React 19 SPA) · Instant Category Filtering</title>
+          <rect x="300" y="100" width="175" height="68" rx="6" class="c-mask"/>
+          <rect x="300" y="100" width="175" height="68" rx="6" class="c-frontend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(306 106) scale(0.6875)">
+            <rect x="2" y="3" width="12" height="10" rx="2"/>
+            <path d="M2 6.5h12"/>
+            <circle cx="4.1" cy="4.8" r=".7" class="sigil-fill"/>
+            <circle cx="6.3" cy="4.8" r=".7" class="sigil-fill"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="387.5" y="132" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Catalog &amp; Search Views</text>
+        <text data-detail="context" x="387.5" y="148" class="t-muted" font-size="9" text-anchor="middle">HomePage.tsx &amp; SkillsPage.tsx</text>
+        <text data-detail="fine" x="387.5" y="160" class="t-frontend" font-size="7" text-anchor="middle">Instant Category Filtering</text>
+        </g>
+
+        <g id="node-ui_detail_buy" data-node-id="ui_detail_buy" data-node-label="Skill Detail &amp; License" tabindex="0" role="button" aria-label="Focus Skill Detail &amp; License, SkillDetailPage.tsx, Client Presentation Tier (React 19 SPA)" aria-pressed="false" data-node-kind="frontend" data-node-sublabel="SkillDetailPage.tsx" data-node-tag="1-Click Free / Credit Unlock" data-node-context="Client Presentation Tier (React 19 SPA)">
+          <title>Skill Detail &amp; License · SkillDetailPage.tsx · Client Presentation Tier (React 19 SPA) · 1-Click Free / Credit Unlock</title>
+          <rect x="300" y="220" width="175" height="68" rx="6" class="c-mask"/>
+          <rect x="300" y="220" width="175" height="68" rx="6" class="c-frontend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(306 226) scale(0.6875)">
+            <rect x="2" y="3" width="12" height="10" rx="2"/>
+            <path d="M2 6.5h12"/>
+            <circle cx="4.1" cy="4.8" r=".7" class="sigil-fill"/>
+            <circle cx="6.3" cy="4.8" r=".7" class="sigil-fill"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="387.5" y="252" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Skill Detail &amp; License</text>
+        <text data-detail="context" x="387.5" y="268" class="t-muted" font-size="9" text-anchor="middle">SkillDetailPage.tsx</text>
+        <text data-detail="fine" x="387.5" y="280" class="t-frontend" font-size="7" text-anchor="middle">1-Click Free / Credit Unlock</text>
+        </g>
+
+        <g id="node-ui_creator_sell" data-node-id="ui_creator_sell" data-node-label="Creator Studio &amp; Sell" tabindex="0" role="button" aria-label="Focus Creator Studio &amp; Sell, SellPage.tsx &amp; DashboardPage.tsx, Client Presentation Tier (React 19 SPA)" aria-pressed="false" data-node-kind="frontend" data-node-sublabel="SellPage.tsx &amp; DashboardPage.tsx" data-node-tag="70% Revenue Share" data-node-context="Client Presentation Tier (React 19 SPA)">
+          <title>Creator Studio &amp; Sell · SellPage.tsx &amp; DashboardPage.tsx · Client Presentation Tier (React 19 SPA) · 70% Revenue Share</title>
+          <rect x="300" y="340" width="175" height="68" rx="6" class="c-mask"/>
+          <rect x="300" y="340" width="175" height="68" rx="6" class="c-frontend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(306 346) scale(0.6875)">
+            <rect x="2" y="3" width="12" height="10" rx="2"/>
+            <path d="M2 6.5h12"/>
+            <circle cx="4.1" cy="4.8" r=".7" class="sigil-fill"/>
+            <circle cx="6.3" cy="4.8" r=".7" class="sigil-fill"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="387.5" y="372" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Creator Studio &amp; Sell</text>
+        <text data-detail="context" x="387.5" y="388" class="t-muted" font-size="8.6" text-anchor="middle">SellPage.tsx &amp; DashboardPage.tsx</text>
+        <text data-detail="fine" x="387.5" y="400" class="t-frontend" font-size="7" text-anchor="middle">70% Revenue Share</text>
+        </g>
+
+        <g id="node-ui_mcp_hub" data-node-id="ui_mcp_hub" data-node-label="MCP Protocol Inspector" tabindex="0" role="button" aria-label="Focus MCP Protocol Inspector, McpHubPage.tsx Sandbox, Client Presentation Tier (React 19 SPA)" aria-pressed="false" data-node-kind="frontend" data-node-sublabel="McpHubPage.tsx Sandbox" data-node-tag="Interactive Tool Caller" data-node-context="Client Presentation Tier (React 19 SPA)">
+          <title>MCP Protocol Inspector · McpHubPage.tsx Sandbox · Client Presentation Tier (React 19 SPA) · Interactive Tool Caller</title>
+          <rect x="300" y="460" width="175" height="68" rx="6" class="c-mask"/>
+          <rect x="300" y="460" width="175" height="68" rx="6" class="c-frontend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(306 466) scale(0.6875)">
+            <rect x="2" y="3" width="12" height="10" rx="2"/>
+            <path d="M2 6.5h12"/>
+            <circle cx="4.1" cy="4.8" r=".7" class="sigil-fill"/>
+            <circle cx="6.3" cy="4.8" r=".7" class="sigil-fill"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="387.5" y="492" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">MCP Protocol Inspector</text>
+        <text data-detail="context" x="387.5" y="508" class="t-muted" font-size="9" text-anchor="middle">McpHubPage.tsx Sandbox</text>
+        <text data-detail="fine" x="387.5" y="520" class="t-frontend" font-size="7" text-anchor="middle">Interactive Tool Caller</text>
+        </g>
+
+        <g id="node-ui_auth_context" data-node-id="ui_auth_context" data-node-label="AuthContext &amp; Session" tabindex="0" role="button" aria-label="Focus AuthContext &amp; Session, AuthContext.tsx, Client Presentation Tier (React 19 SPA)" aria-pressed="false" data-node-kind="security" data-node-sublabel="AuthContext.tsx" data-node-tag="JWT in LocalStorage" data-node-context="Client Presentation Tier (React 19 SPA)">
+          <title>AuthContext &amp; Session · AuthContext.tsx · Client Presentation Tier (React 19 SPA) · JWT in LocalStorage</title>
+          <rect x="300" y="580" width="175" height="68" rx="6" class="c-mask"/>
+          <rect x="300" y="580" width="175" height="68" rx="6" class="c-security" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(306 586) scale(0.6875)">
+            <path d="M8 2.2 13 4v3.5c0 3.1-1.8 5.4-5 6.5-3.2-1.1-5-3.4-5-6.5V4Z"/>
+            <path d="m5.8 8 1.5 1.5 3-3"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="387.5" y="612" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">AuthContext &amp; Session</text>
+        <text data-detail="context" x="387.5" y="628" class="t-muted" font-size="9" text-anchor="middle">AuthContext.tsx</text>
+        <text data-detail="fine" x="387.5" y="640" class="t-security" font-size="7" text-anchor="middle">JWT in LocalStorage</text>
+        </g>
+
+        <g id="node-vite_dev_proxy" data-node-id="vite_dev_proxy" data-node-label="Vite Development Proxy" tabindex="0" role="button" aria-label="Focus Vite Development Proxy, vite.config.ts Reverse Proxy, Edge Gateway &amp; Routing Tier" aria-pressed="false" data-node-kind="cloud" data-node-sublabel="vite.config.ts Reverse Proxy" data-node-tag="Proxy :5173 -&gt; :3000" data-node-context="Edge Gateway &amp; Routing Tier">
+          <title>Vite Development Proxy · vite.config.ts Reverse Proxy · Edge Gateway &amp; Routing Tier · Proxy :5173 -&gt; :3000</title>
+          <rect x="550" y="280" width="165" height="68" rx="6" class="c-mask"/>
+          <rect x="550" y="280" width="165" height="68" rx="6" class="c-cloud" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="cloud" class="semantic-sigil s-cloud" transform="translate(556 286) scale(0.6875)">
+            <path d="M4.3 12.5h7.3a2.4 2.4 0 0 0 .2-4.8 4 4 0 0 0-7.5-1.3A3.1 3.1 0 0 0 4.3 12.5Z"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="632.5" y="312" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Vite Development Proxy</text>
+        <text data-detail="context" x="632.5" y="328" class="t-muted" font-size="9" text-anchor="middle">vite.config.ts Reverse Proxy</text>
+        <text data-detail="fine" x="632.5" y="340" class="t-cloud" font-size="7" text-anchor="middle">Proxy :5173 -&gt; :3000</text>
+        </g>
+
+        <g id="node-auth_middleware" data-node-id="auth_middleware" data-node-label="JWT &amp; Bcrypt Guard" tabindex="0" role="button" aria-label="Focus JWT &amp; Bcrypt Guard, server/middleware/auth.ts, Edge Gateway &amp; Routing Tier" aria-pressed="false" data-node-kind="security" data-node-sublabel="server/middleware/auth.ts" data-node-tag="requireAuth / optionalAuth" data-node-context="Edge Gateway &amp; Routing Tier">
+          <title>JWT &amp; Bcrypt Guard · server/middleware/auth.ts · Edge Gateway &amp; Routing Tier · requireAuth / optionalAuth</title>
+          <rect x="550" y="440" width="165" height="68" rx="6" class="c-mask"/>
+          <rect x="550" y="440" width="165" height="68" rx="6" class="c-security" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(556 446) scale(0.6875)">
+            <path d="M8 2.2 13 4v3.5c0 3.1-1.8 5.4-5 6.5-3.2-1.1-5-3.4-5-6.5V4Z"/>
+            <path d="m5.8 8 1.5 1.5 3-3"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="632.5" y="472" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">JWT &amp; Bcrypt Guard</text>
+        <text data-detail="context" x="632.5" y="488" class="t-muted" font-size="9" text-anchor="middle">server/middleware/auth.ts</text>
+        <text data-detail="fine" x="632.5" y="500" class="t-security" font-size="7" text-anchor="middle">requireAuth / optionalAuth</text>
+        </g>
+
+        <g id="node-express_server" data-node-id="express_server" data-node-label="Express 4 Server Engine" tabindex="0" role="button" aria-label="Focus Express 4 Server Engine, server/index.ts, KYRON Core Application &amp; Domain Services (Express 4)" aria-pressed="false" data-node-kind="backend" data-node-sublabel="server/index.ts" data-node-tag="Port 3000 / REST &amp; MCP" data-node-context="KYRON Core Application &amp; Domain Services (Express 4)">
+          <title>Express 4 Server Engine · server/index.ts · KYRON Core Application &amp; Domain Services (Express 4) · Port 3000 / REST &amp; MCP</title>
+          <rect x="790" y="280" width="175" height="68" rx="6" class="c-mask"/>
+          <rect x="790" y="280" width="175" height="68" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(796 286) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="877.5" y="312" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Express 4 Server Engine</text>
+        <text data-detail="context" x="877.5" y="328" class="t-muted" font-size="9" text-anchor="middle">server/index.ts</text>
+        <text data-detail="fine" x="877.5" y="340" class="t-backend" font-size="7" text-anchor="middle">Port 3000 / REST &amp; MCP</text>
+        </g>
+
+        <g id="node-svc_skills" data-node-id="svc_skills" data-node-label="Skills Catalog Router" tabindex="0" role="button" aria-label="Focus Skills Catalog Router, server/routes/skills.ts, KYRON Core Application &amp; Domain Services (Express 4)" aria-pressed="false" data-node-kind="backend" data-node-sublabel="server/routes/skills.ts" data-node-tag="32 Categories &amp; Flash Deals" data-node-context="KYRON Core Application &amp; Domain Services (Express 4)">
+          <title>Skills Catalog Router · server/routes/skills.ts · KYRON Core Application &amp; Domain Services (Express 4) · 32 Categories &amp; Flash Deals</title>
+          <rect x="790" y="100" width="175" height="68" rx="6" class="c-mask"/>
+          <rect x="790" y="100" width="175" height="68" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(796 106) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="877.5" y="132" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Skills Catalog Router</text>
+        <text data-detail="context" x="877.5" y="148" class="t-muted" font-size="9" text-anchor="middle">server/routes/skills.ts</text>
+        <text data-detail="fine" x="877.5" y="160" class="t-backend" font-size="7" text-anchor="middle">32 Categories &amp; Flash Deals</text>
+        </g>
+
+        <g id="node-svc_creator" data-node-id="svc_creator" data-node-label="Creator Publishing Router" tabindex="0" role="button" aria-label="Focus Creator Publishing Router, server/routes/creator.ts, KYRON Core Application &amp; Domain Services (Express 4)" aria-pressed="false" data-node-kind="backend" data-node-sublabel="server/routes/creator.ts" data-node-tag="Package Intake &amp; Analytics" data-node-context="KYRON Core Application &amp; Domain Services (Express 4)">
+          <title>Creator Publishing Router · server/routes/creator.ts · KYRON Core Application &amp; Domain Services (Express 4) · Package Intake &amp; Analytics</title>
+          <rect x="790" y="440" width="175" height="68" rx="6" class="c-mask"/>
+          <rect x="790" y="440" width="175" height="68" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(796 446) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="877.5" y="472" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Creator Publishing Router</text>
+        <text data-detail="context" x="877.5" y="488" class="t-muted" font-size="9" text-anchor="middle">server/routes/creator.ts</text>
+        <text data-detail="fine" x="877.5" y="500" class="t-backend" font-size="7" text-anchor="middle">Package Intake &amp; Analytics</text>
+        </g>
+
+        <g id="node-mcp_gateway" data-node-id="mcp_gateway" data-node-label="MCP JSON-RPC Gateway" tabindex="0" role="button" aria-label="Focus MCP JSON-RPC Gateway, server/routes/mcp.ts, KYRON Core Application &amp; Domain Services (Express 4)" aria-pressed="false" data-node-kind="messagebus" data-node-sublabel="server/routes/mcp.ts" data-node-tag="Streaming Transport" data-node-context="KYRON Core Application &amp; Domain Services (Express 4)">
+          <title>MCP JSON-RPC Gateway · server/routes/mcp.ts · KYRON Core Application &amp; Domain Services (Express 4) · Streaming Transport</title>
+          <rect x="790" y="580" width="175" height="68" rx="6" class="c-mask"/>
+          <rect x="790" y="580" width="175" height="68" rx="6" class="c-messagebus" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="messagebus" class="semantic-sigil s-messagebus" transform="translate(796 586) scale(0.6875)">
+            <path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/>
+            <circle cx="5" cy="4.5" r="1" class="sigil-fill"/>
+            <circle cx="10.5" cy="8" r="1" class="sigil-fill"/>
+            <circle cx="7" cy="11.5" r="1" class="sigil-fill"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="877.5" y="612" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">MCP JSON-RPC Gateway</text>
+        <text data-detail="context" x="877.5" y="628" class="t-muted" font-size="9" text-anchor="middle">server/routes/mcp.ts</text>
+        <text data-detail="fine" x="877.5" y="640" class="t-messagebus" font-size="7" text-anchor="middle">Streaming Transport</text>
+        </g>
+
+        <g id="node-svc_purchases" data-node-id="svc_purchases" data-node-label="Purchase &amp; Wallet Engine" tabindex="0" role="button" aria-label="Focus Purchase &amp; Wallet Engine, server/routes/purchases.ts, Security Threat Engine &amp; Autonomous Tool Dispatch" aria-pressed="false" data-node-kind="backend" data-node-sublabel="server/routes/purchases.ts" data-node-tag="License Keys &amp; Entitlements" data-node-context="Security Threat Engine &amp; Autonomous Tool Dispatch">
+          <title>Purchase &amp; Wallet Engine · server/routes/purchases.ts · Security Threat Engine &amp; Autonomous Tool Dispatch · License Keys &amp; Entitlements</title>
+          <rect x="1040" y="200" width="175" height="68" rx="6" class="c-mask"/>
+          <rect x="1040" y="200" width="175" height="68" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(1046 206) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="1127.5" y="232" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Purchase &amp; Wallet Engine</text>
+        <text data-detail="context" x="1127.5" y="248" class="t-muted" font-size="9" text-anchor="middle">server/routes/purchases.ts</text>
+        <text data-detail="fine" x="1127.5" y="260" class="t-backend" font-size="7" text-anchor="middle">License Keys &amp; Entitlements</text>
+        </g>
+
+        <g id="node-sec_scanner" data-node-id="sec_scanner" data-node-label="8-Point Threat Scanner" tabindex="0" role="button" aria-label="Focus 8-Point Threat Scanner, services/securityScanner.ts, Security Threat Engine &amp; Autonomous Tool Dispatch" aria-pressed="false" data-node-kind="security" data-node-sublabel="services/securityScanner.ts" data-node-tag="Static &amp; Heuristic AST" data-node-context="Security Threat Engine &amp; Autonomous Tool Dispatch">
+          <title>8-Point Threat Scanner · services/securityScanner.ts · Security Threat Engine &amp; Autonomous Tool Dispatch · Static &amp; Heuristic AST</title>
+          <rect x="1040" y="360" width="175" height="68" rx="6" class="c-mask"/>
+          <rect x="1040" y="360" width="175" height="68" rx="6" class="c-security" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(1046 366) scale(0.6875)">
+            <path d="M8 2.2 13 4v3.5c0 3.1-1.8 5.4-5 6.5-3.2-1.1-5-3.4-5-6.5V4Z"/>
+            <path d="m5.8 8 1.5 1.5 3-3"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="1127.5" y="392" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">8-Point Threat Scanner</text>
+        <text data-detail="context" x="1127.5" y="408" class="t-muted" font-size="9" text-anchor="middle">services/securityScanner.ts</text>
+        <text data-detail="fine" x="1127.5" y="420" class="t-security" font-size="7" text-anchor="middle">Static &amp; Heuristic AST</text>
+        </g>
+
+        <g id="node-mcp_tools" data-node-id="mcp_tools" data-node-label="5 Autonomous Agent Tools" tabindex="0" role="button" aria-label="Focus 5 Autonomous Agent Tools, search, install, execute..., Security Threat Engine &amp; Autonomous Tool Dispatch" aria-pressed="false" data-node-kind="cloud" data-node-sublabel="search, install, execute..." data-node-tag="tools/call Dispatcher" data-node-context="Security Threat Engine &amp; Autonomous Tool Dispatch">
+          <title>5 Autonomous Agent Tools · search, install, execute... · Security Threat Engine &amp; Autonomous Tool Dispatch · tools/call Dispatcher</title>
+          <rect x="1040" y="520" width="175" height="68" rx="6" class="c-mask"/>
+          <rect x="1040" y="520" width="175" height="68" rx="6" class="c-cloud" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="cloud" class="semantic-sigil s-cloud" transform="translate(1046 526) scale(0.6875)">
+            <path d="M4.3 12.5h7.3a2.4 2.4 0 0 0 .2-4.8 4 4 0 0 0-7.5-1.3A3.1 3.1 0 0 0 4.3 12.5Z"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="1127.5" y="552" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">5 Autonomous Agent Tools</text>
+        <text data-detail="context" x="1127.5" y="568" class="t-muted" font-size="9" text-anchor="middle">search, install, execute...</text>
+        <text data-detail="fine" x="1127.5" y="580" class="t-cloud" font-size="7" text-anchor="middle">tools/call Dispatcher</text>
+        </g>
+
+        <g id="node-db_sqlite" data-node-id="db_sqlite" data-node-label="SQLite Engine (WAL)" tabindex="0" role="button" aria-label="Focus SQLite Engine (WAL), Node 22 native node:sqlite, SQLite Persistence Tier (WAL)" aria-pressed="false" data-node-kind="database" data-node-sublabel="Node 22 native node:sqlite" data-node-tag="data/kyron.sqlite" data-node-context="SQLite Persistence Tier (WAL)">
+          <title>SQLite Engine (WAL) · Node 22 native node:sqlite · SQLite Persistence Tier (WAL) · data/kyron.sqlite</title>
+          <rect x="1290" y="160" width="180" height="68" rx="6" class="c-mask"/>
+          <rect x="1290" y="160" width="180" height="68" rx="6" class="c-database" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(1296 166) scale(0.6875)">
+            <ellipse cx="8" cy="4" rx="5" ry="2"/>
+            <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="1380" y="192" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">SQLite Engine (WAL)</text>
+        <text data-detail="context" x="1380" y="208" class="t-muted" font-size="9" text-anchor="middle">Node 22 native node:sqlite</text>
+        <text data-detail="fine" x="1380" y="220" class="t-database" font-size="7" text-anchor="middle">data/kyron.sqlite</text>
+        </g>
+
+        <g id="node-db_core_tables" data-node-id="db_core_tables" data-node-label="Core Catalog Entities" tabindex="0" role="button" aria-label="Focus Core Catalog Entities, profiles, skills, deals, votes, SQLite Persistence Tier (WAL)" aria-pressed="false" data-node-kind="database" data-node-sublabel="profiles, skills, deals, votes" data-node-tag="ACID Relational Storage" data-node-context="SQLite Persistence Tier (WAL)">
+          <title>Core Catalog Entities · profiles, skills, deals, votes · SQLite Persistence Tier (WAL) · ACID Relational Storage</title>
+          <rect x="1290" y="320" width="180" height="68" rx="6" class="c-mask"/>
+          <rect x="1290" y="320" width="180" height="68" rx="6" class="c-database" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(1296 326) scale(0.6875)">
+            <ellipse cx="8" cy="4" rx="5" ry="2"/>
+            <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="1380" y="352" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Core Catalog Entities</text>
+        <text data-detail="context" x="1380" y="368" class="t-muted" font-size="9" text-anchor="middle">profiles, skills, deals, votes</text>
+        <text data-detail="fine" x="1380" y="380" class="t-database" font-size="7" text-anchor="middle">ACID Relational Storage</text>
+        </g>
+
+        <g id="node-db_ledger_tables" data-node-id="db_ledger_tables" data-node-label="Purchases &amp; Package Store" tabindex="0" role="button" aria-label="Focus Purchases &amp; Package Store, user_purchases &amp; skill_packages, SQLite Persistence Tier (WAL)" aria-pressed="false" data-node-kind="database" data-node-sublabel="user_purchases &amp; skill_packages" data-node-tag="Encrypted Keys &amp; Content" data-node-context="SQLite Persistence Tier (WAL)">
+          <title>Purchases &amp; Package Store · user_purchases &amp; skill_packages · SQLite Persistence Tier (WAL) · Encrypted Keys &amp; Content</title>
+          <rect x="1290" y="480" width="180" height="68" rx="6" class="c-mask"/>
+          <rect x="1290" y="480" width="180" height="68" rx="6" class="c-database" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(1296 486) scale(0.6875)">
+            <ellipse cx="8" cy="4" rx="5" ry="2"/>
+            <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="1380" y="512" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Purchases &amp; Package Store</text>
+        <text data-detail="context" x="1380" y="528" class="t-muted" font-size="9" text-anchor="middle">user_purchases &amp; skill_packages</text>
+        <text data-detail="fine" x="1380" y="540" class="t-database" font-size="7" text-anchor="middle">Encrypted Keys &amp; Content</text>
+        </g>
+
+        <!-- Connection labels -->
+        <g data-detail="context" data-edge-from="ext_browser" data-edge-to="ui_detail_buy" data-edge-label="User Interaction" data-edge-key="0" data-edge-id="e1">
+          <rect x="271" y="202" width="86.8" height="14" rx="3" class="c-mask"/>
+          <text x="314.4" y="212" class="t-edge-emphasis" font-size="8" text-anchor="middle">User Interaction</text>
+        </g>
+        <g data-detail="context" data-edge-from="ext_agent_ide" data-edge-to="ui_mcp_hub" data-edge-label="Inspect MCP Spec" data-edge-key="1" data-edge-id="e2">
+          <rect x="172.2" y="417" width="86.8" height="14" rx="3" class="c-mask"/>
+          <text x="215.6" y="427" class="t-edge-default" font-size="8" text-anchor="middle">Inspect MCP Spec</text>
+        </g>
+        <g data-detail="context" data-edge-from="ext_mock_stripe" data-edge-to="ui_auth_context" data-edge-label="Credit Simulation" data-edge-key="2" data-edge-id="e3">
+          <rect x="167.39999999999998" y="557" width="91.6" height="14" rx="3" class="c-mask"/>
+          <text x="213.2" y="567" class="t-edge-dashed" font-size="8" text-anchor="middle">Credit Simulation</text>
+        </g>
+        <g data-detail="context" data-edge-from="ui_detail_buy" data-edge-to="vite_dev_proxy" data-edge-label="HTTP Requests" data-edge-key="3" data-edge-id="e4">
+          <rect x="434.1" y="292" width="72.4" height="14" rx="3" class="c-mask"/>
+          <text x="470.3" y="302" class="t-edge-default" font-size="8" text-anchor="middle">HTTP Requests</text>
+        </g>
+        <g data-detail="context" data-edge-from="ui_auth_context" data-edge-to="auth_middleware" data-edge-label="Bearer JWT" data-edge-key="4" data-edge-id="e5">
+          <rect x="483.5" y="524" width="58" height="14" rx="3" class="c-mask"/>
+          <text x="512.5" y="534" class="t-edge-security" font-size="8" text-anchor="middle">Bearer JWT</text>
+        </g>
+        <g data-detail="context" data-edge-from="vite_dev_proxy" data-edge-to="express_server" data-edge-label="Proxy to :3000" data-edge-key="5" data-edge-id="e6">
+          <rect x="713.9" y="285.95" width="77.2" height="14" rx="3" class="c-mask"/>
+          <text x="752.5" y="295.95" class="t-edge-emphasis" font-size="8" text-anchor="middle">Proxy to :3000</text>
+        </g>
+        <g data-detail="context" data-edge-from="auth_middleware" data-edge-to="express_server" data-edge-label="User Session" data-edge-key="6" data-edge-id="e7">
+          <rect x="678.9000000000001" y="390.5" width="67.6" height="14" rx="3" class="c-mask"/>
+          <text x="712.7" y="400.5" class="t-edge-security" font-size="8" text-anchor="middle">User Session</text>
+        </g>
+        <g data-detail="context" data-edge-from="express_server" data-edge-to="svc_skills" data-edge-label="/api/skills" data-edge-key="7" data-edge-id="e8">
+          <rect x="846.1" y="260" width="62.8" height="14" rx="3" class="c-mask"/>
+          <text x="877.5" y="270" class="t-edge-default" font-size="8" text-anchor="middle">/api/skills</text>
+        </g>
+        <g data-detail="context" data-edge-from="express_server" data-edge-to="svc_creator" data-edge-label="/api/creator" data-edge-key="8" data-edge-id="e9">
+          <rect x="811.95" y="387" width="67.6" height="14" rx="3" class="c-mask"/>
+          <text x="845.75" y="397" class="t-edge-default" font-size="8" text-anchor="middle">/api/creator</text>
+        </g>
+        <g data-detail="context" data-edge-from="express_server" data-edge-to="mcp_gateway" data-edge-label="/api/mcp" data-edge-key="9" data-edge-id="e10">
+          <rect x="804.55" y="352" width="48.4" height="14" rx="3" class="c-mask"/>
+          <text x="828.75" y="362" class="t-edge-emphasis" font-size="8" text-anchor="middle">/api/mcp</text>
+        </g>
+        <g data-detail="context" data-edge-from="express_server" data-edge-to="svc_purchases" data-edge-label="Purchase Flow" data-edge-key="10" data-edge-id="e11">
+          <rect x="966.3" y="254" width="72.4" height="14" rx="3" class="c-mask"/>
+          <text x="1002.5" y="264" class="t-edge-emphasis" font-size="8" text-anchor="middle">Purchase Flow</text>
+        </g>
+        <g data-detail="context" data-edge-from="svc_creator" data-edge-to="sec_scanner" data-edge-label="AST Threat Scan" data-edge-key="11" data-edge-id="e12">
+          <rect x="1008.5" y="447" width="82" height="14" rx="3" class="c-mask"/>
+          <text x="1049.5" y="457" class="t-edge-security" font-size="8" text-anchor="middle">AST Threat Scan</text>
+        </g>
+        <g data-detail="context" data-edge-from="mcp_gateway" data-edge-to="mcp_tools" data-edge-label="tools/call" data-edge-key="12" data-edge-id="e13">
+          <rect x="973.5" y="564" width="58" height="14" rx="3" class="c-mask"/>
+          <text x="1002.5" y="574" class="t-edge-emphasis" font-size="8" text-anchor="middle">tools/call</text>
+        </g>
+        <g data-detail="context" data-edge-from="svc_purchases" data-edge-to="db_sqlite" data-edge-label="Balance Deduct" data-edge-key="13" data-edge-id="e14">
+          <rect x="1264.5" y="232" width="77.2" height="14" rx="3" class="c-mask"/>
+          <text x="1303.1" y="242" class="t-edge-emphasis" font-size="8" text-anchor="middle">Balance Deduct</text>
+        </g>
+        <g data-detail="context" data-edge-from="sec_scanner" data-edge-to="db_core_tables" data-edge-label="Audit Findings" data-edge-key="14" data-edge-id="e15">
+          <rect x="1213.9" y="354" width="77.2" height="14" rx="3" class="c-mask"/>
+          <text x="1252.5" y="364" class="t-edge-security" font-size="8" text-anchor="middle">Audit Findings</text>
+        </g>
+        <g data-detail="context" data-edge-from="mcp_tools" data-edge-to="db_ledger_tables" data-edge-label="Package Access" data-edge-key="15" data-edge-id="e16">
+          <rect x="1213.9" y="514" width="77.2" height="14" rx="3" class="c-mask"/>
+          <text x="1252.5" y="524" class="t-edge-default" font-size="8" text-anchor="middle">Package Access</text>
+        </g>
+        <g data-detail="context" data-edge-from="db_sqlite" data-edge-to="db_core_tables" data-edge-label="Manage Schema" data-edge-key="16" data-edge-id="e17">
+          <rect x="1301.6" y="267" width="72.4" height="14" rx="3" class="c-mask"/>
+          <text x="1337.8" y="277" class="t-edge-default" font-size="8" text-anchor="middle">Manage Schema</text>
+        </g>
+        <g data-detail="context" data-edge-from="db_core_tables" data-edge-to="db_ledger_tables" data-edge-label="FK Constraints" data-edge-key="17" data-edge-id="e18">
+          <rect x="1296.8000000000002" y="427" width="77.2" height="14" rx="3" class="c-mask"/>
+          <text x="1335.4" y="437" class="t-edge-default" font-size="8" text-anchor="middle">FK Constraints</text>
+        </g>
+
+        <!-- Boundary labels (foreground masks keep routes out of titles) -->
+        <g data-graph-role="structural-frame-label" data-composition-frame-id="0" data-composition-frame-kind="region" data-composition-frame-label="External Clients &amp; AI Agent Ecosystem">
+          <rect data-graph-role="structural-frame-label-mask" x="29.716117932258072" y="139" width="230.56776413548386" height="17" rx="3" class="c-mask"/>
+          <text data-boundary-label="" x="33.71611793225807" y="152.93548487096774" class="t-cloud" font-size="9.935484870967741" font-weight="600">External Clients &amp; AI Agent Ecosystem</text>
+        </g>
+
+        <g data-graph-role="structural-frame-label" data-composition-frame-id="1" data-composition-frame-kind="region" data-composition-frame-label="Client Presentation Tier (React 19 SPA)">
+          <rect data-graph-role="structural-frame-label-mask" x="266.25482700967746" y="79" width="242.49034598064515" height="17" rx="3" class="c-mask"/>
+          <text data-boundary-label="" x="270.25482700967746" y="92.93548487096774" class="t-cloud" font-size="9.935484870967741" font-weight="600">Client Presentation Tier (React 19 SPA)</text>
+        </g>
+
+        <g data-graph-role="structural-frame-label" data-composition-frame-id="2" data-composition-frame-kind="security-group" data-composition-frame-label="Edge Gateway &amp; Routing Tier">
+          <rect data-graph-role="structural-frame-label-mask" x="524" y="259" width="170.9548549096774" height="17" rx="3" class="c-mask"/>
+          <text data-boundary-label="" x="528" y="272.93548487096774" class="t-security" font-size="9.935484870967741" font-weight="600">Edge Gateway &amp; Routing Tier</text>
+        </g>
+
+        <g data-graph-role="structural-frame-label" data-composition-frame-id="3" data-composition-frame-kind="region" data-composition-frame-label="KYRON Core Application &amp; Domain Services (Express 4)">
+          <rect data-graph-role="structural-frame-label-mask" x="717.5064360129032" y="79" width="319.9871279741935" height="17" rx="3" class="c-mask"/>
+          <text data-boundary-label="" x="721.5064360129032" y="92.93548487096774" class="t-cloud" font-size="9.935484870967741" font-weight="600">KYRON Core Application &amp; Domain Services (Express 4)</text>
+        </g>
+
+        <g data-graph-role="structural-frame-label" data-composition-frame-id="4" data-composition-frame-kind="security-group" data-composition-frame-label="Security Threat Engine &amp; Autonomous Tool Dispatch">
+          <rect data-graph-role="structural-frame-label-mask" x="976.4483723967742" y="179" width="302.1032552064516" height="17" rx="3" class="c-mask"/>
+          <text data-boundary-label="" x="980.4483723967742" y="192.93548487096774" class="t-security" font-size="9.935484870967741" font-weight="600">Security Threat Engine &amp; Autonomous Tool Dispatch</text>
+        </g>
+
+        <g data-graph-role="structural-frame-label" data-composition-frame-id="5" data-composition-frame-kind="region" data-composition-frame-label="SQLite Persistence Tier (WAL)">
+          <rect data-graph-role="structural-frame-label-mask" x="1264" y="139" width="182.8774367548387" height="17" rx="3" class="c-mask"/>
+          <text data-boundary-label="" x="1268" y="152.93548487096774" class="t-cloud" font-size="9.935484870967741" font-weight="600">SQLite Persistence Tier (WAL)</text>
+        </g>
+
+        <!-- Legend -->
+        <g data-legend="" data-legend-bridge="">
+          <text x="40" y="700" class="t-primary" font-size="12" font-weight="650">Legend</text>
+          <g data-legend-semantic-kind="frontend" data-legend-kind="frontend" data-legend-label="Frontend" data-legend-x="40" data-legend-baseline="720" data-legend-width="83">
+            <rect x="40" y="711" width="16" height="10" rx="2.5" class="c-frontend" stroke-width="1"/>
+            <text x="62" y="720" class="t-muted" font-size="10" font-weight="500">Frontend</text>
+          </g>
+          <g data-legend-semantic-kind="backend" data-legend-kind="backend" data-legend-label="Backend" data-legend-x="145" data-legend-baseline="720" data-legend-width="78">
+            <rect x="145" y="711" width="16" height="10" rx="2.5" class="c-backend" stroke-width="1"/>
+            <text x="167" y="720" class="t-muted" font-size="10" font-weight="500">Backend</text>
+          </g>
+          <g data-legend-semantic-kind="database" data-legend-kind="database" data-legend-label="Database" data-legend-x="245" data-legend-baseline="720" data-legend-width="83">
+            <rect x="245" y="711" width="16" height="10" rx="2.5" class="c-database" stroke-width="1"/>
+            <text x="267" y="720" class="t-muted" font-size="10" font-weight="500">Database</text>
+          </g>
+          <g data-legend-semantic-kind="cloud" data-legend-kind="cloud" data-legend-label="Cloud" data-legend-x="350" data-legend-baseline="720" data-legend-width="68">
+            <rect x="350" y="711" width="16" height="10" rx="2.5" class="c-cloud" stroke-width="1"/>
+            <text x="372" y="720" class="t-muted" font-size="10" font-weight="500">Cloud</text>
+          </g>
+          <g data-legend-semantic-kind="security" data-legend-kind="security" data-legend-label="Security" data-legend-x="440" data-legend-baseline="720" data-legend-width="83">
+            <rect x="440" y="711" width="16" height="10" rx="2.5" class="c-security" stroke-width="1"/>
+            <text x="462" y="720" class="t-muted" font-size="10" font-weight="500">Security</text>
+          </g>
+          <g data-legend-semantic-kind="messagebus" data-legend-kind="messagebus" data-legend-label="Message bus" data-legend-x="545" data-legend-baseline="720" data-legend-width="98">
+            <rect x="545" y="711" width="16" height="10" rx="2.5" class="c-messagebus" stroke-width="1"/>
+            <text x="567" y="720" class="t-muted" font-size="10" font-weight="500">Message bus</text>
+          </g>
+          <g data-legend-semantic-kind="external" data-legend-kind="external" data-legend-label="External" data-legend-x="665" data-legend-baseline="720" data-legend-width="83">
+            <rect x="665" y="711" width="16" height="10" rx="2.5" class="c-external" stroke-width="1"/>
+            <text x="687" y="720" class="t-muted" font-size="10" font-weight="500">External</text>
+          </g>
+        </g>
+      </svg>

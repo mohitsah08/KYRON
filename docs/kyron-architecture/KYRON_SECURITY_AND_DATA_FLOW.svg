@@ -1,0 +1,337 @@
+<svg viewBox="0 0 1300 596" role="img" lang="en" aria-labelledby="archify-diagram-title archify-diagram-description" data-preset="editorial" data-quality-profile="showcase" data-reader-fit="intrinsic-height" data-reader-min-text="7.5" data-reader-primary-text="14">
+        <title id="archify-diagram-title">KYRON Security &amp; Data Flow — AST Threat Engine Specification</title>
+        <desc id="archify-diagram-description">8-Point Automated Security Scanner, Audit Logging, and Package Distribution Architecture</desc>
+        <!-- Definitions -->
+        <defs>
+          <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" class="m-default" />
+          </marker>
+          <marker id="arrowhead-emphasis" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" class="m-emphasis" />
+          </marker>
+          <marker id="arrowhead-security" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" class="m-security" />
+          </marker>
+          <marker id="arrowhead-dashed" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" class="m-dashed" />
+          </marker>
+          <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+            <path d="M 40 0 L 0 0 0 40" class="c-grid" stroke-width="0.5"/>
+          </pattern>
+        </defs>
+
+        <!-- Background Grid -->
+        <rect width="100%" height="100%" fill="url(#grid)" />
+
+        <!-- Boundaries (behind everything) -->
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="0" data-composition-frame-label="Creator Submission Surface" x="30" y="170" width="230" height="278" rx="12" class="c-region" stroke-width="1"/>
+
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="security-group" data-composition-frame-id="1" data-composition-frame-label="API Authorization Boundary" x="270" y="250" width="235" height="278" rx="8" class="c-security-group" stroke-width="1"/>
+
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="2" data-composition-frame-label="8-Point Threat Scanner Architecture" x="520" y="90" width="235" height="438" rx="12" class="c-region" stroke-width="1"/>
+
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="security-group" data-composition-frame-id="3" data-composition-frame-label="Audit Decision &amp; Gatekeeper" x="770" y="250" width="235" height="278" rx="8" class="c-security-group" stroke-width="1"/>
+
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="4" data-composition-frame-label="SQLite Persistence Tier (WAL)" x="1020" y="130" width="240" height="398" rx="12" class="c-region" stroke-width="1"/>
+
+        <!-- Connection paths (before components for correct z-order) -->
+        <g data-graph-role="automatic-crossover" style="--step:0">
+          <path data-graph-role="automatic-crossover-underlay" d="M 145 268 L 145 360" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="creator_client" data-edge-to="sell_page_ui" data-edge-label="Author SKILL.md" data-edge-key="0" data-edge-id="e1" data-composition-points="145,268;145,360" data-composition-crossover="halo" data-composition-independent="true" d="M 145 268 L 145 360" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        </g>
+        <g data-graph-role="automatic-crossover" style="--step:1">
+          <path data-graph-role="automatic-crossover-underlay" d="M 230 394 L 257 394 Q 265 394 265 386 L 265 322 Q 265 314 273 314 L 300 314" fill="none" stroke="var(--mask)" stroke-width="5.8" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="sell_page_ui" data-edge-to="creator_router" data-edge-label="Submit Listing" data-edge-key="1" data-edge-id="e2" data-composition-points="230,394;265,394;265,314;300,314" data-composition-crossover="halo" data-composition-independent="true" d="M 230 394 L 257 394 Q 265 394 265 386 L 265 322 Q 265 314 273 314 L 300 314" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        </g>
+        <g data-graph-role="automatic-crossover" style="--step:2">
+          <path data-graph-role="automatic-crossover-underlay" d="M 387.5 440 L 387.5 348" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="auth_guard" data-edge-to="creator_router" data-edge-label="Verify JWT" data-edge-key="2" data-edge-id="e3" data-composition-points="387.5,440;387.5,348" data-composition-crossover="halo" data-composition-independent="true" d="M 387.5 440 L 387.5 348" class="a-security" stroke-width="1.5" marker-end="url(#arrowhead-security)"/>
+        </g>
+        <g data-graph-role="automatic-crossover" style="--step:3">
+          <path data-graph-role="automatic-crossover-underlay" d="M 475 314 L 550 314" fill="none" stroke="var(--mask)" stroke-width="5.8" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="creator_router" data-edge-to="scanner_core" data-edge-label="Invoke Scanner" data-edge-key="3" data-edge-id="e4" data-composition-points="475,314;550,314" data-composition-crossover="halo" data-composition-independent="true" d="M 475 314 L 550 314" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        </g>
+        <g data-graph-role="automatic-crossover" style="--step:4">
+          <path data-graph-role="automatic-crossover-underlay" d="M 637.5 280 L 637.5 188" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="scanner_core" data-edge-to="rule_ast_static" data-edge-label="Check AST" data-edge-key="4" data-edge-id="e5" data-composition-points="637.5,280;637.5,188" data-composition-crossover="halo" data-composition-independent="true" d="M 637.5 280 L 637.5 188" class="a-security" stroke-width="1.5" marker-end="url(#arrowhead-security)"/>
+        </g>
+        <g data-graph-role="automatic-crossover" style="--step:5">
+          <path data-graph-role="automatic-crossover-underlay" d="M 637.5 348 L 637.5 440" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="scanner_core" data-edge-to="rule_system_heuristic" data-edge-label="Check Heuristics" data-edge-key="5" data-edge-id="e6" data-composition-points="637.5,348;637.5,440" data-composition-crossover="halo" data-composition-independent="true" d="M 637.5 348 L 637.5 440" class="a-security" stroke-width="1.5" marker-end="url(#arrowhead-security)"/>
+        </g>
+        <g data-graph-role="automatic-crossover" style="--step:6">
+          <path data-graph-role="automatic-crossover-underlay" d="M 725 314 L 800 314" fill="none" stroke="var(--mask)" stroke-width="5.8" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="scanner_core" data-edge-to="audit_logger" data-edge-label="Rule Reports" data-edge-key="6" data-edge-id="e7" data-composition-points="725,314;800,314" data-composition-crossover="halo" data-composition-independent="true" d="M 725 314 L 800 314" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        </g>
+        <g data-graph-role="automatic-crossover" style="--step:7">
+          <path data-graph-role="automatic-crossover-underlay" d="M 887.5 348 L 887.5 440" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="audit_logger" data-edge-to="rejection_gate" data-edge-label="On Failure" data-edge-key="7" data-edge-id="e8" data-composition-points="887.5,348;887.5,440" data-composition-crossover="halo" data-composition-independent="true" d="M 887.5 348 L 887.5 440" class="a-security" stroke-width="1.5" marker-end="url(#arrowhead-security)"/>
+        </g>
+        <g data-graph-role="automatic-crossover" style="--step:8">
+          <path data-graph-role="automatic-crossover-underlay" d="M 975 298.95 L 1004.5 298.95 Q 1012.5 298.95 1012.5 290.95 L 1012.5 202 Q 1012.5 194 1020.5 194 L 1050 194" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="audit_logger" data-edge-to="db_audit_logs" data-edge-label="Log All 8 Rules" data-edge-key="8" data-edge-id="e9" data-composition-points="975,298.95;1012.5,298.95;1012.5,194;1050,194" data-composition-crossover="halo" data-composition-independent="true" d="M 975 298.95 L 1004.5 298.95 Q 1012.5 298.95 1012.5 290.95 L 1012.5 202 Q 1012.5 194 1020.5 194 L 1050 194" class="a-security" stroke-width="1.5" marker-end="url(#arrowhead-security)"/>
+        </g>
+        <g data-graph-role="automatic-crossover" style="--step:9">
+          <path data-graph-role="automatic-crossover-underlay" d="M 975 314 L 1004.5 314 Q 1012.5 314 1012.5 322 L 1012.5 326 Q 1012.5 334 1020.5 334 L 1050 334" fill="none" stroke="var(--mask)" stroke-width="5.8" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="audit_logger" data-edge-to="db_skills_catalog" data-edge-label="Publish Skill" data-edge-key="9" data-edge-id="e10" data-composition-points="975,314;1012.5,314;1012.5,334;1050,334" data-composition-crossover="halo" data-composition-independent="true" d="M 975 314 L 1004.5 314 Q 1012.5 314 1012.5 322 L 1012.5 326 Q 1012.5 334 1020.5 334 L 1050 334" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        </g>
+        <g data-graph-role="automatic-crossover" style="--step:10">
+          <path data-graph-role="automatic-crossover-underlay" d="M 975 329.05 L 1004.5 329.05 Q 1012.5 329.05 1012.5 337.05 L 1012.5 466 Q 1012.5 474 1020.5 474 L 1050 474" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="audit_logger" data-edge-to="db_skill_packages" data-edge-label="Store Package" data-edge-key="10" data-edge-id="e11" data-composition-points="975,329.05;1012.5,329.05;1012.5,474;1050,474" data-composition-crossover="halo" data-composition-independent="true" d="M 975 329.05 L 1004.5 329.05 Q 1012.5 329.05 1012.5 337.05 L 1012.5 466 Q 1012.5 474 1020.5 474 L 1050 474" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        </g>
+
+        <!-- Components -->
+        <g id="node-creator_client" data-node-id="creator_client" data-node-label="Creator Developer" tabindex="0" role="button" aria-label="Focus Creator Developer, Skill Author, Creator Submission Surface" aria-pressed="false" data-node-kind="external" data-node-sublabel="Skill Author" data-node-tag="Submit Package" data-node-context="Creator Submission Surface">
+          <title>Creator Developer · Skill Author · Creator Submission Surface · Submit Package</title>
+          <rect x="60" y="200" width="170" height="68" rx="6" class="c-mask"/>
+          <rect x="60" y="200" width="170" height="68" rx="6" class="c-external" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(66 206) scale(0.6875)">
+            <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
+            <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="145" y="232" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Creator Developer</text>
+        <text data-detail="context" x="145" y="248" class="t-muted" font-size="9" text-anchor="middle">Skill Author</text>
+        <text data-detail="fine" x="145" y="260" class="t-external" font-size="7" text-anchor="middle">Submit Package</text>
+        </g>
+
+        <g id="node-sell_page_ui" data-node-id="sell_page_ui" data-node-label="Creator Studio Intake" tabindex="0" role="button" aria-label="Focus Creator Studio Intake, client/src/pages/SellPage.tsx, Creator Submission Surface" aria-pressed="false" data-node-kind="frontend" data-node-sublabel="client/src/pages/SellPage.tsx" data-node-tag="SKILL.md Editor" data-node-context="Creator Submission Surface">
+          <title>Creator Studio Intake · client/src/pages/SellPage.tsx · Creator Submission Surface · SKILL.md Editor</title>
+          <rect x="60" y="360" width="170" height="68" rx="6" class="c-mask"/>
+          <rect x="60" y="360" width="170" height="68" rx="6" class="c-frontend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(66 366) scale(0.6875)">
+            <rect x="2" y="3" width="12" height="10" rx="2"/>
+            <path d="M2 6.5h12"/>
+            <circle cx="4.1" cy="4.8" r=".7" class="sigil-fill"/>
+            <circle cx="6.3" cy="4.8" r=".7" class="sigil-fill"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="145" y="392" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Creator Studio Intake</text>
+        <text data-detail="context" x="145" y="408" class="t-muted" font-size="9" text-anchor="middle">client/src/pages/SellPage.tsx</text>
+        <text data-detail="fine" x="145" y="420" class="t-frontend" font-size="7" text-anchor="middle">SKILL.md Editor</text>
+        </g>
+
+        <g id="node-creator_router" data-node-id="creator_router" data-node-label="Creator Publishing API" tabindex="0" role="button" aria-label="Focus Creator Publishing API, server/routes/creator.ts, API Authorization Boundary" aria-pressed="false" data-node-kind="backend" data-node-sublabel="server/routes/creator.ts" data-node-tag="POST /api/creator/publish" data-node-context="API Authorization Boundary">
+          <title>Creator Publishing API · server/routes/creator.ts · API Authorization Boundary · POST /api/creator/publish</title>
+          <rect x="300" y="280" width="175" height="68" rx="6" class="c-mask"/>
+          <rect x="300" y="280" width="175" height="68" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(306 286) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="387.5" y="312" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Creator Publishing API</text>
+        <text data-detail="context" x="387.5" y="328" class="t-muted" font-size="9" text-anchor="middle">server/routes/creator.ts</text>
+        <text data-detail="fine" x="387.5" y="340" class="t-backend" font-size="7" text-anchor="middle">POST /api/creator/publish</text>
+        </g>
+
+        <g id="node-auth_guard" data-node-id="auth_guard" data-node-label="JWT Bearer Gate" tabindex="0" role="button" aria-label="Focus JWT Bearer Gate, server/middleware/auth.ts, API Authorization Boundary" aria-pressed="false" data-node-kind="security" data-node-sublabel="server/middleware/auth.ts" data-node-tag="requireAuth" data-node-context="API Authorization Boundary">
+          <title>JWT Bearer Gate · server/middleware/auth.ts · API Authorization Boundary · requireAuth</title>
+          <rect x="300" y="440" width="175" height="68" rx="6" class="c-mask"/>
+          <rect x="300" y="440" width="175" height="68" rx="6" class="c-security" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(306 446) scale(0.6875)">
+            <path d="M8 2.2 13 4v3.5c0 3.1-1.8 5.4-5 6.5-3.2-1.1-5-3.4-5-6.5V4Z"/>
+            <path d="m5.8 8 1.5 1.5 3-3"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="387.5" y="472" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">JWT Bearer Gate</text>
+        <text data-detail="context" x="387.5" y="488" class="t-muted" font-size="9" text-anchor="middle">server/middleware/auth.ts</text>
+        <text data-detail="fine" x="387.5" y="500" class="t-security" font-size="7" text-anchor="middle">requireAuth</text>
+        </g>
+
+        <g id="node-scanner_core" data-node-id="scanner_core" data-node-label="Security Threat Engine" tabindex="0" role="button" aria-label="Focus Security Threat Engine, services/securityScanner.ts, 8-Point Threat Scanner Architecture" aria-pressed="false" data-node-kind="security" data-node-sublabel="services/securityScanner.ts" data-node-tag="scanSkillPackage()" data-node-context="8-Point Threat Scanner Architecture">
+          <title>Security Threat Engine · services/securityScanner.ts · 8-Point Threat Scanner Architecture · scanSkillPackage()</title>
+          <rect x="550" y="280" width="175" height="68" rx="6" class="c-mask"/>
+          <rect x="550" y="280" width="175" height="68" rx="6" class="c-security" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(556 286) scale(0.6875)">
+            <path d="M8 2.2 13 4v3.5c0 3.1-1.8 5.4-5 6.5-3.2-1.1-5-3.4-5-6.5V4Z"/>
+            <path d="m5.8 8 1.5 1.5 3-3"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="637.5" y="312" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Security Threat Engine</text>
+        <text data-detail="context" x="637.5" y="328" class="t-muted" font-size="9" text-anchor="middle">services/securityScanner.ts</text>
+        <text data-detail="fine" x="637.5" y="340" class="t-security" font-size="7" text-anchor="middle">scanSkillPackage()</text>
+        </g>
+
+        <g id="node-rule_ast_static" data-node-id="rule_ast_static" data-node-label="Static AST Analyzers" tabindex="0" role="button" aria-label="Focus Static AST Analyzers, Rules 1, 2, 7 (Frontmatter, Eval), 8-Point Threat Scanner Architecture" aria-pressed="false" data-node-kind="security" data-node-sublabel="Rules 1, 2, 7 (Frontmatter, Eval)" data-node-tag="Syntax &amp; Injections" data-node-context="8-Point Threat Scanner Architecture">
+          <title>Static AST Analyzers · Rules 1, 2, 7 (Frontmatter, Eval) · 8-Point Threat Scanner Architecture · Syntax &amp; Injections</title>
+          <rect x="550" y="120" width="175" height="68" rx="6" class="c-mask"/>
+          <rect x="550" y="120" width="175" height="68" rx="6" class="c-security" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(556 126) scale(0.6875)">
+            <path d="M8 2.2 13 4v3.5c0 3.1-1.8 5.4-5 6.5-3.2-1.1-5-3.4-5-6.5V4Z"/>
+            <path d="m5.8 8 1.5 1.5 3-3"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="637.5" y="152" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Static AST Analyzers</text>
+        <text data-detail="context" x="637.5" y="168" class="t-muted" font-size="8.4" text-anchor="middle">Rules 1, 2, 7 (Frontmatter, Eval)</text>
+        <text data-detail="fine" x="637.5" y="180" class="t-security" font-size="7" text-anchor="middle">Syntax &amp; Injections</text>
+        </g>
+
+        <g id="node-rule_system_heuristic" data-node-id="rule_system_heuristic" data-node-label="System &amp; Egress Heuristics" tabindex="0" role="button" aria-label="Focus System &amp; Egress Heuristics, Rules 3, 4, 5, 6 (Disk, Shell, Net), 8-Point Threat Scanner Architecture" aria-pressed="false" data-node-kind="security" data-node-sublabel="Rules 3, 4, 5, 6 (Disk, Shell, Net)" data-node-tag="Privilege Checks" data-node-context="8-Point Threat Scanner Architecture">
+          <title>System &amp; Egress Heuristics · Rules 3, 4, 5, 6 (Disk, Shell, Net) · 8-Point Threat Scanner Architecture · Privilege Checks</title>
+          <rect x="550" y="440" width="175" height="68" rx="6" class="c-mask"/>
+          <rect x="550" y="440" width="175" height="68" rx="6" class="c-security" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(556 446) scale(0.6875)">
+            <path d="M8 2.2 13 4v3.5c0 3.1-1.8 5.4-5 6.5-3.2-1.1-5-3.4-5-6.5V4Z"/>
+            <path d="m5.8 8 1.5 1.5 3-3"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="637.5" y="472" class="t-primary" font-size="10.7" font-weight="600" text-anchor="middle">System &amp; Egress Heuristics</text>
+        <text data-detail="context" x="637.5" y="488" class="t-muted" font-size="7.9" text-anchor="middle">Rules 3, 4, 5, 6 (Disk, Shell, Net)</text>
+        <text data-detail="fine" x="637.5" y="500" class="t-security" font-size="7" text-anchor="middle">Privilege Checks</text>
+        </g>
+
+        <g id="node-audit_logger" data-node-id="audit_logger" data-node-label="Audit Verdict Engine" tabindex="0" role="button" aria-label="Focus Audit Verdict Engine, Pass/Fail Determination, Audit Decision &amp; Gatekeeper" aria-pressed="false" data-node-kind="security" data-node-sublabel="Pass/Fail Determination" data-node-tag="100% Zero-Tolerance" data-node-context="Audit Decision &amp; Gatekeeper">
+          <title>Audit Verdict Engine · Pass/Fail Determination · Audit Decision &amp; Gatekeeper · 100% Zero-Tolerance</title>
+          <rect x="800" y="280" width="175" height="68" rx="6" class="c-mask"/>
+          <rect x="800" y="280" width="175" height="68" rx="6" class="c-security" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(806 286) scale(0.6875)">
+            <path d="M8 2.2 13 4v3.5c0 3.1-1.8 5.4-5 6.5-3.2-1.1-5-3.4-5-6.5V4Z"/>
+            <path d="m5.8 8 1.5 1.5 3-3"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="887.5" y="312" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Audit Verdict Engine</text>
+        <text data-detail="context" x="887.5" y="328" class="t-muted" font-size="9" text-anchor="middle">Pass/Fail Determination</text>
+        <text data-detail="fine" x="887.5" y="340" class="t-security" font-size="7" text-anchor="middle">100% Zero-Tolerance</text>
+        </g>
+
+        <g id="node-rejection_gate" data-node-id="rejection_gate" data-node-label="Malicious Rejection Gate" tabindex="0" role="button" aria-label="Focus Malicious Rejection Gate, HTTP 400 Bad Request, Audit Decision &amp; Gatekeeper" aria-pressed="false" data-node-kind="security" data-node-sublabel="HTTP 400 Bad Request" data-node-tag="Blocks Catalog Entry" data-node-context="Audit Decision &amp; Gatekeeper">
+          <title>Malicious Rejection Gate · HTTP 400 Bad Request · Audit Decision &amp; Gatekeeper · Blocks Catalog Entry</title>
+          <rect x="800" y="440" width="175" height="68" rx="6" class="c-mask"/>
+          <rect x="800" y="440" width="175" height="68" rx="6" class="c-security" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(806 446) scale(0.6875)">
+            <path d="M8 2.2 13 4v3.5c0 3.1-1.8 5.4-5 6.5-3.2-1.1-5-3.4-5-6.5V4Z"/>
+            <path d="m5.8 8 1.5 1.5 3-3"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="887.5" y="472" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Malicious Rejection Gate</text>
+        <text data-detail="context" x="887.5" y="488" class="t-muted" font-size="9" text-anchor="middle">HTTP 400 Bad Request</text>
+        <text data-detail="fine" x="887.5" y="500" class="t-security" font-size="7" text-anchor="middle">Blocks Catalog Entry</text>
+        </g>
+
+        <g id="node-db_audit_logs" data-node-id="db_audit_logs" data-node-label="Audit Logs Table" tabindex="0" role="button" aria-label="Focus Audit Logs Table, security_audit_logs, SQLite Persistence Tier (WAL)" aria-pressed="false" data-node-kind="database" data-node-sublabel="security_audit_logs" data-node-tag="Per-Rule Findings" data-node-context="SQLite Persistence Tier (WAL)">
+          <title>Audit Logs Table · security_audit_logs · SQLite Persistence Tier (WAL) · Per-Rule Findings</title>
+          <rect x="1050" y="160" width="180" height="68" rx="6" class="c-mask"/>
+          <rect x="1050" y="160" width="180" height="68" rx="6" class="c-database" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(1056 166) scale(0.6875)">
+            <ellipse cx="8" cy="4" rx="5" ry="2"/>
+            <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="1140" y="192" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Audit Logs Table</text>
+        <text data-detail="context" x="1140" y="208" class="t-muted" font-size="9" text-anchor="middle">security_audit_logs</text>
+        <text data-detail="fine" x="1140" y="220" class="t-database" font-size="7" text-anchor="middle">Per-Rule Findings</text>
+        </g>
+
+        <g id="node-db_skills_catalog" data-node-id="db_skills_catalog" data-node-label="Skills Catalog Table" tabindex="0" role="button" aria-label="Focus Skills Catalog Table, skills (status: live), SQLite Persistence Tier (WAL)" aria-pressed="false" data-node-kind="database" data-node-sublabel="skills (status: live)" data-node-tag="Public Discovery" data-node-context="SQLite Persistence Tier (WAL)">
+          <title>Skills Catalog Table · skills (status: live) · SQLite Persistence Tier (WAL) · Public Discovery</title>
+          <rect x="1050" y="300" width="180" height="68" rx="6" class="c-mask"/>
+          <rect x="1050" y="300" width="180" height="68" rx="6" class="c-database" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(1056 306) scale(0.6875)">
+            <ellipse cx="8" cy="4" rx="5" ry="2"/>
+            <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="1140" y="332" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Skills Catalog Table</text>
+        <text data-detail="context" x="1140" y="348" class="t-muted" font-size="9" text-anchor="middle">skills (status: live)</text>
+        <text data-detail="fine" x="1140" y="360" class="t-database" font-size="7" text-anchor="middle">Public Discovery</text>
+        </g>
+
+        <g id="node-db_skill_packages" data-node-id="db_skill_packages" data-node-label="Package Vault Table" tabindex="0" role="button" aria-label="Focus Package Vault Table, skill_packages, SQLite Persistence Tier (WAL)" aria-pressed="false" data-node-kind="database" data-node-sublabel="skill_packages" data-node-tag="Entitlement Protected" data-node-context="SQLite Persistence Tier (WAL)">
+          <title>Package Vault Table · skill_packages · SQLite Persistence Tier (WAL) · Entitlement Protected</title>
+          <rect x="1050" y="440" width="180" height="68" rx="6" class="c-mask"/>
+          <rect x="1050" y="440" width="180" height="68" rx="6" class="c-database" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(1056 446) scale(0.6875)">
+            <ellipse cx="8" cy="4" rx="5" ry="2"/>
+            <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="1140" y="472" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Package Vault Table</text>
+        <text data-detail="context" x="1140" y="488" class="t-muted" font-size="9" text-anchor="middle">skill_packages</text>
+        <text data-detail="fine" x="1140" y="500" class="t-database" font-size="7" text-anchor="middle">Entitlement Protected</text>
+        </g>
+
+        <!-- Connection labels -->
+        <g data-detail="context" data-edge-from="creator_client" data-edge-to="sell_page_ui" data-edge-label="Author SKILL.md" data-edge-key="0" data-edge-id="e1">
+          <rect x="57" y="307" width="82" height="14" rx="3" class="c-mask"/>
+          <text x="98" y="317" class="t-edge-default" font-size="8" text-anchor="middle">Author SKILL.md</text>
+        </g>
+        <g data-detail="context" data-edge-from="sell_page_ui" data-edge-to="creator_router" data-edge-label="Submit Listing" data-edge-key="1" data-edge-id="e2">
+          <rect x="271" y="367" width="77.2" height="14" rx="3" class="c-mask"/>
+          <text x="309.6" y="377" class="t-edge-emphasis" font-size="8" text-anchor="middle">Submit Listing</text>
+        </g>
+        <g data-detail="context" data-edge-from="auth_guard" data-edge-to="creator_router" data-edge-label="Verify JWT" data-edge-key="2" data-edge-id="e3">
+          <rect x="358.5" y="420" width="58" height="14" rx="3" class="c-mask"/>
+          <text x="387.5" y="430" class="t-edge-security" font-size="8" text-anchor="middle">Verify JWT</text>
+        </g>
+        <g data-detail="context" data-edge-from="creator_router" data-edge-to="scanner_core" data-edge-label="Invoke Scanner" data-edge-key="3" data-edge-id="e4">
+          <rect x="473.9" y="294" width="77.2" height="14" rx="3" class="c-mask"/>
+          <text x="512.5" y="304" class="t-edge-emphasis" font-size="8" text-anchor="middle">Invoke Scanner</text>
+        </g>
+        <g data-detail="context" data-edge-from="scanner_core" data-edge-to="rule_ast_static" data-edge-label="Check AST" data-edge-key="4" data-edge-id="e5">
+          <rect x="610.9" y="260" width="53.199999999999996" height="14" rx="3" class="c-mask"/>
+          <text x="637.5" y="270" class="t-edge-security" font-size="8" text-anchor="middle">Check AST</text>
+        </g>
+        <g data-detail="context" data-edge-from="scanner_core" data-edge-to="rule_system_heuristic" data-edge-label="Check Heuristics" data-edge-key="5" data-edge-id="e6">
+          <rect x="544.7" y="387" width="86.8" height="14" rx="3" class="c-mask"/>
+          <text x="588.1" y="397" class="t-edge-security" font-size="8" text-anchor="middle">Check Heuristics</text>
+        </g>
+        <g data-detail="context" data-edge-from="scanner_core" data-edge-to="audit_logger" data-edge-label="Rule Reports" data-edge-key="6" data-edge-id="e7">
+          <rect x="728.7" y="294" width="67.6" height="14" rx="3" class="c-mask"/>
+          <text x="762.5" y="304" class="t-edge-emphasis" font-size="8" text-anchor="middle">Rule Reports</text>
+        </g>
+        <g data-detail="context" data-edge-from="audit_logger" data-edge-to="rejection_gate" data-edge-label="On Failure" data-edge-key="7" data-edge-id="e8">
+          <rect x="823.5" y="387" width="58" height="14" rx="3" class="c-mask"/>
+          <text x="852.5" y="397" class="t-edge-security" font-size="8" text-anchor="middle">On Failure</text>
+        </g>
+        <g data-detail="context" data-edge-from="audit_logger" data-edge-to="db_audit_logs" data-edge-label="Log All 8 Rules" data-edge-key="8" data-edge-id="e9">
+          <rect x="971.5" y="226.475" width="82" height="14" rx="3" class="c-mask"/>
+          <text x="1012.5" y="236.475" class="t-edge-security" font-size="8" text-anchor="middle">Log All 8 Rules</text>
+        </g>
+        <g data-detail="context" data-edge-from="audit_logger" data-edge-to="db_skills_catalog" data-edge-label="Publish Skill" data-edge-key="9" data-edge-id="e10">
+          <rect x="976.3" y="304" width="72.4" height="14" rx="3" class="c-mask"/>
+          <text x="1012.5" y="314" class="t-edge-emphasis" font-size="8" text-anchor="middle">Publish Skill</text>
+        </g>
+        <g data-detail="context" data-edge-from="audit_logger" data-edge-to="db_skill_packages" data-edge-label="Store Package" data-edge-key="10" data-edge-id="e11">
+          <rect x="976.3" y="381.525" width="72.4" height="14" rx="3" class="c-mask"/>
+          <text x="1012.5" y="391.525" class="t-edge-default" font-size="8" text-anchor="middle">Store Package</text>
+        </g>
+
+        <!-- Boundary labels (foreground masks keep routes out of titles) -->
+        <g data-graph-role="structural-frame-label" data-composition-frame-id="0" data-composition-frame-kind="region" data-composition-frame-label="Creator Submission Surface">
+          <rect data-graph-role="structural-frame-label-mask" x="34" y="180" width="150.4" height="16" rx="3" class="c-mask"/>
+          <text data-boundary-label="" x="38" y="193" class="t-cloud" font-size="9" font-weight="600">Creator Submission Surface</text>
+        </g>
+
+        <g data-graph-role="structural-frame-label" data-composition-frame-id="1" data-composition-frame-kind="security-group" data-composition-frame-label="API Authorization Boundary">
+          <rect data-graph-role="structural-frame-label-mask" x="274" y="260" width="150.4" height="16" rx="3" class="c-mask"/>
+          <text data-boundary-label="" x="278" y="273" class="t-security" font-size="9" font-weight="600">API Authorization Boundary</text>
+        </g>
+
+        <g data-graph-role="structural-frame-label" data-composition-frame-id="2" data-composition-frame-kind="region" data-composition-frame-label="8-Point Threat Scanner Architecture">
+          <rect data-graph-role="structural-frame-label-mask" x="524" y="100" width="199" height="16" rx="3" class="c-mask"/>
+          <text data-boundary-label="" x="528" y="113" class="t-cloud" font-size="9" font-weight="600">8-Point Threat Scanner Architecture</text>
+        </g>
+
+        <g data-graph-role="structural-frame-label" data-composition-frame-id="3" data-composition-frame-kind="security-group" data-composition-frame-label="Audit Decision &amp; Gatekeeper">
+          <rect data-graph-role="structural-frame-label-mask" x="774" y="260" width="155.79999999999998" height="16" rx="3" class="c-mask"/>
+          <text data-boundary-label="" x="778" y="273" class="t-security" font-size="9" font-weight="600">Audit Decision &amp; Gatekeeper</text>
+        </g>
+
+        <g data-graph-role="structural-frame-label" data-composition-frame-id="4" data-composition-frame-kind="region" data-composition-frame-label="SQLite Persistence Tier (WAL)">
+          <rect data-graph-role="structural-frame-label-mask" x="1024" y="140" width="166.6" height="16" rx="3" class="c-mask"/>
+          <text data-boundary-label="" x="1028" y="153" class="t-cloud" font-size="9" font-weight="600">SQLite Persistence Tier (WAL)</text>
+        </g>
+
+        <!-- Legend -->
+        <g data-legend="" data-legend-bridge="">
+          <text x="40" y="560" class="t-primary" font-size="12" font-weight="650">Legend</text>
+          <g data-legend-semantic-kind="frontend" data-legend-kind="frontend" data-legend-label="Frontend" data-legend-x="40" data-legend-baseline="580" data-legend-width="83">
+            <rect x="40" y="571" width="16" height="10" rx="2.5" class="c-frontend" stroke-width="1"/>
+            <text x="62" y="580" class="t-muted" font-size="10" font-weight="500">Frontend</text>
+          </g>
+          <g data-legend-semantic-kind="backend" data-legend-kind="backend" data-legend-label="Backend" data-legend-x="145" data-legend-baseline="580" data-legend-width="78">
+            <rect x="145" y="571" width="16" height="10" rx="2.5" class="c-backend" stroke-width="1"/>
+            <text x="167" y="580" class="t-muted" font-size="10" font-weight="500">Backend</text>
+          </g>
+          <g data-legend-semantic-kind="database" data-legend-kind="database" data-legend-label="Database" data-legend-x="245" data-legend-baseline="580" data-legend-width="83">
+            <rect x="245" y="571" width="16" height="10" rx="2.5" class="c-database" stroke-width="1"/>
+            <text x="267" y="580" class="t-muted" font-size="10" font-weight="500">Database</text>
+          </g>
+          <g data-legend-semantic-kind="security" data-legend-kind="security" data-legend-label="Security" data-legend-x="350" data-legend-baseline="580" data-legend-width="83">
+            <rect x="350" y="571" width="16" height="10" rx="2.5" class="c-security" stroke-width="1"/>
+            <text x="372" y="580" class="t-muted" font-size="10" font-weight="500">Security</text>
+          </g>
+          <g data-legend-semantic-kind="external" data-legend-kind="external" data-legend-label="External" data-legend-x="455" data-legend-baseline="580" data-legend-width="83">
+            <rect x="455" y="571" width="16" height="10" rx="2.5" class="c-external" stroke-width="1"/>
+            <text x="477" y="580" class="t-muted" font-size="10" font-weight="500">External</text>
+          </g>
+        </g>
+      </svg>

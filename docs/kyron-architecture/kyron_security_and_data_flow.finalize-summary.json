@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "command": "finalize",
+  "status": "pass",
+  "type": "architecture",
+  "quality": "showcase",
+  "specification": {
+    "path": "/Users/onlymec/Documents/Project V/KYARON/KYRON/docs/kyron-architecture/KYRON_SECURITY_AND_DATA_FLOW.architecture.json",
+    "sha256": "3d4962232121af185d39aa162a598807608cbf13a37bec879475e57e93802660",
+    "bytes": 8113
+  },
+  "artifact": {
+    "path": "/Users/onlymec/Documents/Project V/KYARON/KYRON/docs/kyron-architecture/KYRON_SECURITY_AND_DATA_FLOW.html",
+    "sha256": "0a44c0776fb8dd30649b2515236193c3627303d82b05074e2694744c623d405f",
+    "bytes": 775539
+  },
+  "gates": {
+    "validate": "pass",
+    "deliver": "pass",
+    "check": "pass",
+    "browser-check": "pass"
+  },
+  "diagnostics": [],
+  "diagnosticSummary": {
+    "total": 0,
+    "shown": 0,
+    "truncated": false
+  },
+  "evidence": {
+    "receipt": "/Users/onlymec/Documents/Project V/KYARON/KYRON/docs/kyron-architecture/kyron_security_and_data_flow.finalize.json",
+    "summaryReceipt": "/Users/onlymec/Documents/Project V/KYARON/KYRON/docs/kyron-architecture/kyron_security_and_data_flow.finalize-summary.json",
+    "browserCheckReceipt": "/Users/onlymec/Documents/Project V/KYARON/KYRON/docs/kyron-architecture/kyron_security_and_data_flow.browser-check.json"
+  },
+  "visualReview": "not-requested",
+  "durationMs": 6851
+}

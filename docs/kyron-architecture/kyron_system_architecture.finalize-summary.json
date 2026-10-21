@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "command": "finalize",
+  "status": "pass",
+  "type": "architecture",
+  "quality": "showcase",
+  "specification": {
+    "path": "/Users/onlymec/Documents/Project V/KYARON/KYRON/docs/kyron-architecture/KYRON_SYSTEM_ARCHITECTURE.architecture.json",
+    "sha256": "4cc9bc8e566cb76af963c481d649dba1fec71e0dcb10079449838137c5d154ac",
+    "bytes": 10594
+  },
+  "artifact": {
+    "path": "/Users/onlymec/Documents/Project V/KYARON/KYRON/docs/kyron-architecture/KYRON_SYSTEM_ARCHITECTURE.html",
+    "sha256": "9958ed17d01db4d492f5f9e94bf3d3e2fbf8c6f21e9526e529939b3207cd0a6c",
+    "bytes": 800177
+  },
+  "gates": {
+    "validate": "pass",
+    "deliver": "pass",
+    "check": "pass",
+    "browser-check": "pass"
+  },
+  "diagnostics": [],
+  "diagnosticSummary": {
+    "total": 0,
+    "shown": 0,
+    "truncated": false
+  },
+  "evidence": {
+    "receipt": "/Users/onlymec/Documents/Project V/KYARON/KYRON/docs/kyron-architecture/kyron_system_architecture.finalize.json",
+    "summaryReceipt": "/Users/onlymec/Documents/Project V/KYARON/KYRON/docs/kyron-architecture/kyron_system_architecture.finalize-summary.json",
+    "browserCheckReceipt": "/Users/onlymec/Documents/Project V/KYARON/KYRON/docs/kyron-architecture/kyron_system_architecture.browser-check.json"
+  },
+  "visualReview": "not-requested",
+  "durationMs": 7889,
+  "visualReviewRecommendation": {
+    "action": "inspect-route-readability",
+    "signals": {
+      "routesOverSuggestedBends": 1,
+      "routesOverSuggestedStretch": 1
+    },
+    "reason": "Automated gates passed, but crossings or detours still need perceptual review before claiming visual quality.",
+    "affectedRoutes": {
+      "crossings": [],
+      "detours": [
+        {
+          "relationship": {
+            "id": "e10",
+            "from": "express_server",
+            "to": "mcp_gateway",
+            "label": "/api/mcp",
+            "collectionIndex": 9,
+            "artifactIndex": 10
+          },
+          "bends": 4,
+          "stretch": 1.699,
+          "directCorridorBlockers": [
+            {
+              "id": "svc_creator",
+              "label": "Creator Publishing Router",
+              "box": [
+                790,
+                440,
+                175,
+                68
+              ]
+            }
+          ]
+        }
+      ],
+      "truncated": false
+    },
+    "repair": "Trace these relationships at the desktop viewport. For Architecture, use references/architecture-layout-repair.md: reflow a blocked main path or tangled connected scene, and repair an isolated defect locally only when the surrounding composition is accepted. Preserve all semantic content and user-fixed geometry. Rerun finalize once after the edit."
+  }
+}

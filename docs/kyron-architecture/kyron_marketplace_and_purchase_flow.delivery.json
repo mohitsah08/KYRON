@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "66478981-4cbc-4317-94e0-a367cac2e769",
+  "status": "current",
+  "command": "deliver",
+  "type": "workflow",
+  "input": "/Users/onlymec/Documents/Project V/KYARON/KYRON/docs/kyron-architecture/KYRON_MARKETPLACE_AND_PURCHASE_FLOW.workflow.json",
+  "output": "/Users/onlymec/Documents/Project V/KYARON/KYRON/docs/kyron-architecture/KYRON_MARKETPLACE_AND_PURCHASE_FLOW.html",
+  "specification": {
+    "sha256": "2647cd51aa09e061afae308a8a23c027e4fcb0403b67182c5ed5a72c1d705fb8",
+    "bytes": 5634
+  },
+  "artifact": {
+    "sha256": "adde64307ab785788f141454fc4f1d865ea96d1b0726d6624574de8bc1ae0e83",
+    "bytes": 764050
+  }
+}

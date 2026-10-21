@@ -1,0 +1,363 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "KYRON Security & Data Flow — AST Threat Engine Specification",
+    "subtitle": "8-Point Automated Security Scanner, Audit Logging, and Package Distribution Architecture",
+    "output": "docs/kyron-architecture/KYRON_SECURITY_AND_DATA_FLOW.html",
+    "visual_preset": "editorial",
+    "quality_profile": "showcase",
+    "legend": {
+      "mode": "auto"
+    }
+  },
+  "components": [
+    {
+      "id": "creator_client",
+      "type": "external",
+      "label": "Creator Developer",
+      "sublabel": "Skill Author",
+      "tag": "Submit Package",
+      "pos": [
+        60,
+        200
+      ],
+      "size": [
+        170,
+        68
+      ]
+    },
+    {
+      "id": "sell_page_ui",
+      "type": "frontend",
+      "label": "Creator Studio Intake",
+      "sublabel": "client/src/pages/SellPage.tsx",
+      "tag": "SKILL.md Editor",
+      "pos": [
+        60,
+        360
+      ],
+      "size": [
+        170,
+        68
+      ]
+    },
+    {
+      "id": "creator_router",
+      "type": "backend",
+      "label": "Creator Publishing API",
+      "sublabel": "server/routes/creator.ts",
+      "tag": "POST /api/creator/publish",
+      "pos": [
+        300,
+        280
+      ],
+      "size": [
+        175,
+        68
+      ]
+    },
+    {
+      "id": "auth_guard",
+      "type": "security",
+      "label": "JWT Bearer Gate",
+      "sublabel": "server/middleware/auth.ts",
+      "tag": "requireAuth",
+      "pos": [
+        300,
+        440
+      ],
+      "size": [
+        175,
+        68
+      ]
+    },
+    {
+      "id": "scanner_core",
+      "type": "security",
+      "label": "Security Threat Engine",
+      "sublabel": "services/securityScanner.ts",
+      "tag": "scanSkillPackage()",
+      "pos": [
+        550,
+        280
+      ],
+      "size": [
+        175,
+        68
+      ]
+    },
+    {
+      "id": "rule_ast_static",
+      "type": "security",
+      "label": "Static AST Analyzers",
+      "sublabel": "Rules 1, 2, 7 (Frontmatter, Eval)",
+      "tag": "Syntax & Injections",
+      "pos": [
+        550,
+        120
+      ],
+      "size": [
+        175,
+        68
+      ]
+    },
+    {
+      "id": "rule_system_heuristic",
+      "type": "security",
+      "label": "System & Egress Heuristics",
+      "sublabel": "Rules 3, 4, 5, 6 (Disk, Shell, Net)",
+      "tag": "Privilege Checks",
+      "pos": [
+        550,
+        440
+      ],
+      "size": [
+        175,
+        68
+      ]
+    },
+    {
+      "id": "audit_logger",
+      "type": "security",
+      "label": "Audit Verdict Engine",
+      "sublabel": "Pass/Fail Determination",
+      "tag": "100% Zero-Tolerance",
+      "pos": [
+        800,
+        280
+      ],
+      "size": [
+        175,
+        68
+      ]
+    },
+    {
+      "id": "rejection_gate",
+      "type": "security",
+      "label": "Malicious Rejection Gate",
+      "sublabel": "HTTP 400 Bad Request",
+      "tag": "Blocks Catalog Entry",
+      "pos": [
+        800,
+        440
+      ],
+      "size": [
+        175,
+        68
+      ]
+    },
+    {
+      "id": "db_audit_logs",
+      "type": "database",
+      "label": "Audit Logs Table",
+      "sublabel": "security_audit_logs",
+      "tag": "Per-Rule Findings",
+      "pos": [
+        1050,
+        160
+      ],
+      "size": [
+        180,
+        68
+      ]
+    },
+    {
+      "id": "db_skills_catalog",
+      "type": "database",
+      "label": "Skills Catalog Table",
+      "sublabel": "skills (status: live)",
+      "tag": "Public Discovery",
+      "pos": [
+        1050,
+        300
+      ],
+      "size": [
+        180,
+        68
+      ]
+    },
+    {
+      "id": "db_skill_packages",
+      "type": "database",
+      "label": "Package Vault Table",
+      "sublabel": "skill_packages",
+      "tag": "Entitlement Protected",
+      "pos": [
+        1050,
+        440
+      ],
+      "size": [
+        180,
+        68
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Creator Submission Surface",
+      "wraps": [
+        "creator_client",
+        "sell_page_ui"
+      ]
+    },
+    {
+      "kind": "security-group",
+      "label": "API Authorization Boundary",
+      "wraps": [
+        "creator_router",
+        "auth_guard"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "8-Point Threat Scanner Architecture",
+      "wraps": [
+        "scanner_core",
+        "rule_ast_static",
+        "rule_system_heuristic"
+      ]
+    },
+    {
+      "kind": "security-group",
+      "label": "Audit Decision & Gatekeeper",
+      "wraps": [
+        "audit_logger",
+        "rejection_gate"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "SQLite Persistence Tier (WAL)",
+      "wraps": [
+        "db_audit_logs",
+        "db_skills_catalog",
+        "db_skill_packages"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "e1",
+      "from": "creator_client",
+      "to": "sell_page_ui",
+      "label": "Author SKILL.md",
+      "variant": "default",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "e2",
+      "from": "sell_page_ui",
+      "to": "creator_router",
+      "label": "Submit Listing",
+      "variant": "emphasis",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "e3",
+      "from": "auth_guard",
+      "to": "creator_router",
+      "label": "Verify JWT",
+      "variant": "security",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "id": "e4",
+      "from": "creator_router",
+      "to": "scanner_core",
+      "label": "Invoke Scanner",
+      "variant": "emphasis",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "e5",
+      "from": "scanner_core",
+      "to": "rule_ast_static",
+      "label": "Check AST",
+      "variant": "security",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "id": "e6",
+      "from": "scanner_core",
+      "to": "rule_system_heuristic",
+      "label": "Check Heuristics",
+      "variant": "security",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "e7",
+      "from": "scanner_core",
+      "to": "audit_logger",
+      "label": "Rule Reports",
+      "variant": "emphasis",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "e8",
+      "from": "audit_logger",
+      "to": "rejection_gate",
+      "label": "On Failure",
+      "variant": "security",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "e9",
+      "from": "audit_logger",
+      "to": "db_audit_logs",
+      "label": "Log All 8 Rules",
+      "variant": "security",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "e10",
+      "from": "audit_logger",
+      "to": "db_skills_catalog",
+      "label": "Publish Skill",
+      "variant": "emphasis",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "e11",
+      "from": "audit_logger",
+      "to": "db_skill_packages",
+      "label": "Store Package",
+      "variant": "default",
+      "fromSide": "right",
+      "toSide": "left"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "rose",
+      "title": "8-Point Threat Scanner Specification",
+      "items": [
+        "Rule 1: Enforces valid YAML frontmatter containing required name, description, and version",
+        "Rule 2: Detects adversarial prompt injection patterns, role-escapes, and jailbreak markers",
+        "Rules 3-5: Blocks destructive filesystem commands (rm -rf), credential exfiltration, and reverse shells",
+        "Rules 6-8: Audits suspicious telemetry, obfuscated eval execution, and dry-run syntax parsing"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Zero-Trust Publishing & Isolation",
+      "items": [
+        "Every single submission undergoes all 8 rules prior to touching catalog tables",
+        "Any failed check halts execution with HTTP 400 and returns precise diagnostic findings",
+        "Audit findings are permanently indexed in security_audit_logs for public review on skill cards",
+        "Package files are quarantined in skill_packages and released only upon valid entitlement grant"
+      ]
+    }
+  ]
+}

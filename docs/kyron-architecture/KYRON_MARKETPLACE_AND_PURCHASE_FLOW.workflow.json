@@ -1,0 +1,250 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "KYRON Marketplace & Purchase Workflow Specification",
+    "subtitle": "End-to-End User Journey: Catalog Discovery, Deal Pricing, Atomic Balance Deduction & License Grant",
+    "output": "docs/kyron-architecture/KYRON_MARKETPLACE_AND_PURCHASE_FLOW.html",
+    "quality_profile": "showcase",
+    "animation": "trace",
+    "visual_preset": "editorial"
+  },
+  "lanes": [
+    {
+      "id": "buyer_surface",
+      "label": "Buyer UI Surface"
+    },
+    {
+      "id": "catalog_engine",
+      "label": "Catalog & Security Trust"
+    },
+    {
+      "id": "wallet_policy",
+      "label": "Wallet, License & MCP Execution",
+      "variant": "normal"
+    }
+  ],
+  "phases": [
+    {
+      "id": "p_discovery",
+      "label": "Discovery",
+      "fromCol": 0,
+      "toCol": 1
+    },
+    {
+      "id": "p_evaluation",
+      "label": "Security Evaluation",
+      "fromCol": 2,
+      "toCol": 3,
+      "variant": "emphasis"
+    },
+    {
+      "id": "p_acquisition",
+      "label": "License Grant & Run",
+      "fromCol": 4,
+      "toCol": 5,
+      "variant": "dashed"
+    }
+  ],
+  "groups": [
+    {
+      "id": "g_eval",
+      "label": "Trust Verification",
+      "lane": "catalog_engine",
+      "fromCol": 2,
+      "toCol": 3,
+      "variant": "security"
+    },
+    {
+      "id": "g_transact",
+      "label": "Credit Settlement",
+      "lane": "wallet_policy",
+      "fromCol": 3,
+      "toCol": 5,
+      "variant": "emphasis"
+    }
+  ],
+  "mainPath": [
+    "w_browse",
+    "w_search",
+    "w_detail",
+    "w_audit",
+    "w_funds",
+    "w_grant",
+    "w_dashboard",
+    "w_mcp_run"
+  ],
+  "nodes": [
+    {
+      "id": "w_browse",
+      "lane": "buyer_surface",
+      "col": 0,
+      "type": "frontend",
+      "label": "Browse Catalog",
+      "sublabel": "Homepage /skills",
+      "width": 130
+    },
+    {
+      "id": "w_search",
+      "lane": "catalog_engine",
+      "col": 1,
+      "type": "backend",
+      "label": "Filter & Search",
+      "sublabel": "Category & query",
+      "width": 130
+    },
+    {
+      "id": "w_detail",
+      "lane": "buyer_surface",
+      "col": 2,
+      "type": "frontend",
+      "label": "Skill Detail",
+      "sublabel": "/skills/:slug",
+      "width": 130
+    },
+    {
+      "id": "w_audit",
+      "lane": "catalog_engine",
+      "col": 2,
+      "type": "security",
+      "label": "Inspect Audit",
+      "sublabel": "8-Point Threat Report",
+      "tag": "Score 0-100",
+      "width": 130
+    },
+    {
+      "id": "w_funds",
+      "lane": "wallet_policy",
+      "col": 3,
+      "type": "security",
+      "label": "Check Balance",
+      "sublabel": "credit_balance check",
+      "tag": "Policy Gate",
+      "width": 130
+    },
+    {
+      "id": "w_topup",
+      "lane": "buyer_surface",
+      "col": 4,
+      "type": "cloud",
+      "label": "CreditModal",
+      "sublabel": "Sandbox topup packages",
+      "tag": "Mock Checkout",
+      "width": 130
+    },
+    {
+      "id": "w_grant",
+      "lane": "wallet_policy",
+      "col": 4,
+      "type": "database",
+      "label": "Deduct & Insert",
+      "sublabel": "user_purchases row",
+      "tag": "ACID TX",
+      "width": 130
+    },
+    {
+      "id": "w_dashboard",
+      "lane": "buyer_surface",
+      "col": 5,
+      "type": "frontend",
+      "label": "My Library",
+      "sublabel": "/dashboard access",
+      "width": 130
+    },
+    {
+      "id": "w_mcp_run",
+      "lane": "wallet_policy",
+      "col": 5,
+      "type": "messagebus",
+      "label": "MCP Execution",
+      "sublabel": "tools/call via AI",
+      "tag": "Live Agent",
+      "width": 130
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "from": "w_browse",
+      "to": "w_search",
+      "variant": "default"
+    },
+    {
+      "id": "e2",
+      "from": "w_search",
+      "to": "w_detail",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e3",
+      "from": "w_detail",
+      "to": "w_audit",
+      "label": "Verify Trust",
+      "variant": "security"
+    },
+    {
+      "id": "e4",
+      "from": "w_audit",
+      "to": "w_funds",
+      "label": "Click Unlock",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e5",
+      "from": "w_funds",
+      "to": "w_topup",
+      "label": "Insufficient",
+      "variant": "security",
+      "role": "error"
+    },
+    {
+      "id": "e6",
+      "from": "w_topup",
+      "to": "w_grant",
+      "label": "Funded",
+      "variant": "dashed",
+      "role": "branch"
+    },
+    {
+      "id": "e7",
+      "from": "w_funds",
+      "to": "w_grant",
+      "label": "Sufficient",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e8",
+      "from": "w_grant",
+      "to": "w_dashboard",
+      "label": "Unlock Code",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e9",
+      "from": "w_dashboard",
+      "to": "w_mcp_run",
+      "label": "Execute Agent",
+      "variant": "default"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Discovery to Acquisition",
+      "items": [
+        "Buyers browse 32 categories in catalog and filter by tags, rating, or search query",
+        "Skill detail page displays deal price in credits and verified 8-point AST security score",
+        "Wallet policy ensures user has sufficient credits before granting access"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Fulfillment & Execution",
+      "items": [
+        "Atomic database transaction deducts balance and creates user_purchases record",
+        "Skill immediately appears in user library on /dashboard with license key and package tree",
+        "Buyer connects MCP config snippet to Claude Desktop, Cursor, or Antigravity"
+      ]
+    }
+  ]
+}

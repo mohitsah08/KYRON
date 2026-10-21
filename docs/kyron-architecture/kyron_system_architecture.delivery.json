@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "741bd4c8-e35e-4085-bd52-cf2ca2867b38",
+  "status": "current",
+  "command": "deliver",
+  "type": "architecture",
+  "input": "/Users/onlymec/Documents/Project V/KYARON/KYRON/docs/kyron-architecture/KYRON_SYSTEM_ARCHITECTURE.architecture.json",
+  "output": "/Users/onlymec/Documents/Project V/KYARON/KYRON/docs/kyron-architecture/KYRON_SYSTEM_ARCHITECTURE.html",
+  "specification": {
+    "sha256": "4cc9bc8e566cb76af963c481d649dba1fec71e0dcb10079449838137c5d154ac",
+    "bytes": 10594
+  },
+  "artifact": {
+    "sha256": "9958ed17d01db4d492f5f9e94bf3d3e2fbf8c6f21e9526e529939b3207cd0a6c",
+    "bytes": 800177
+  }
+}

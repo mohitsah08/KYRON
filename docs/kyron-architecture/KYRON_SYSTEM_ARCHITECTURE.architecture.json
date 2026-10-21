@@ -1,0 +1,286 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "KYRON System Architecture — Production Specification",
+    "subtitle": "AI Agent Skill.md Marketplace, AST Threat Scanner & Model Context Protocol (MCP) Gateway",
+    "output": "docs/kyron-architecture/KYRON_SYSTEM_ARCHITECTURE.html",
+    "visual_preset": "editorial",
+    "quality_profile": "showcase",
+    "legend": {
+      "mode": "auto"
+    }
+  },
+  "components": [
+    {
+      "id": "ext_browser",
+      "type": "external",
+      "label": "Developer & Buyer Browser",
+      "sublabel": "Desktop & Mobile Chrome/Safari",
+      "tag": "HTTPS Client",
+      "pos": [60, 160],
+      "size": [170, 68]
+    },
+    {
+      "id": "ext_agent_ide",
+      "type": "messagebus",
+      "label": "AI Agent Runtimes",
+      "sublabel": "Claude Code / Cursor / Codex",
+      "tag": "JSON-RPC Client",
+      "pos": [60, 320],
+      "size": [170, 68]
+    },
+    {
+      "id": "ext_mock_stripe",
+      "type": "cloud",
+      "label": "Credit Topup Simulator",
+      "sublabel": "CreditModal (Sandbox Balance)",
+      "tag": "MOCK Topup",
+      "pos": [60, 480],
+      "size": [170, 68]
+    },
+    {
+      "id": "ui_catalog",
+      "type": "frontend",
+      "label": "Catalog & Search Views",
+      "sublabel": "HomePage.tsx & SkillsPage.tsx",
+      "tag": "Instant Category Filtering",
+      "pos": [300, 100],
+      "size": [175, 68]
+    },
+    {
+      "id": "ui_detail_buy",
+      "type": "frontend",
+      "label": "Skill Detail & License",
+      "sublabel": "SkillDetailPage.tsx",
+      "tag": "1-Click Free / Credit Unlock",
+      "pos": [300, 220],
+      "size": [175, 68]
+    },
+    {
+      "id": "ui_creator_sell",
+      "type": "frontend",
+      "label": "Creator Studio & Sell",
+      "sublabel": "SellPage.tsx & DashboardPage.tsx",
+      "tag": "70% Revenue Share",
+      "pos": [300, 340],
+      "size": [175, 68]
+    },
+    {
+      "id": "ui_mcp_hub",
+      "type": "frontend",
+      "label": "MCP Protocol Inspector",
+      "sublabel": "McpHubPage.tsx Sandbox",
+      "tag": "Interactive Tool Caller",
+      "pos": [300, 460],
+      "size": [175, 68]
+    },
+    {
+      "id": "ui_auth_context",
+      "type": "security",
+      "label": "AuthContext & Session",
+      "sublabel": "AuthContext.tsx",
+      "tag": "JWT in LocalStorage",
+      "pos": [300, 580],
+      "size": [175, 68]
+    },
+    {
+      "id": "vite_dev_proxy",
+      "type": "cloud",
+      "label": "Vite Development Proxy",
+      "sublabel": "vite.config.ts Reverse Proxy",
+      "tag": "Proxy :5173 -> :3000",
+      "pos": [550, 280],
+      "size": [165, 68]
+    },
+    {
+      "id": "auth_middleware",
+      "type": "security",
+      "label": "JWT & Bcrypt Guard",
+      "sublabel": "server/middleware/auth.ts",
+      "tag": "requireAuth / optionalAuth",
+      "pos": [550, 440],
+      "size": [165, 68]
+    },
+    {
+      "id": "express_server",
+      "type": "backend",
+      "label": "Express 4 Server Engine",
+      "sublabel": "server/index.ts",
+      "tag": "Port 3000 / REST & MCP",
+      "pos": [790, 280],
+      "size": [175, 68]
+    },
+    {
+      "id": "svc_skills",
+      "type": "backend",
+      "label": "Skills Catalog Router",
+      "sublabel": "server/routes/skills.ts",
+      "tag": "32 Categories & Flash Deals",
+      "pos": [790, 100],
+      "size": [175, 68]
+    },
+    {
+      "id": "svc_creator",
+      "type": "backend",
+      "label": "Creator Publishing Router",
+      "sublabel": "server/routes/creator.ts",
+      "tag": "Package Intake & Analytics",
+      "pos": [790, 440],
+      "size": [175, 68]
+    },
+    {
+      "id": "mcp_gateway",
+      "type": "messagebus",
+      "label": "MCP JSON-RPC Gateway",
+      "sublabel": "server/routes/mcp.ts",
+      "tag": "Streaming Transport",
+      "pos": [790, 580],
+      "size": [175, 68]
+    },
+    {
+      "id": "svc_purchases",
+      "type": "backend",
+      "label": "Purchase & Wallet Engine",
+      "sublabel": "server/routes/purchases.ts",
+      "tag": "License Keys & Entitlements",
+      "pos": [1040, 200],
+      "size": [175, 68]
+    },
+    {
+      "id": "sec_scanner",
+      "type": "security",
+      "label": "8-Point Threat Scanner",
+      "sublabel": "services/securityScanner.ts",
+      "tag": "Static & Heuristic AST",
+      "pos": [1040, 360],
+      "size": [175, 68]
+    },
+    {
+      "id": "mcp_tools",
+      "type": "cloud",
+      "label": "5 Autonomous Agent Tools",
+      "sublabel": "search, install, execute...",
+      "tag": "tools/call Dispatcher",
+      "pos": [1040, 520],
+      "size": [175, 68]
+    },
+    {
+      "id": "db_sqlite",
+      "type": "database",
+      "label": "SQLite Engine (WAL)",
+      "sublabel": "Node 22 native node:sqlite",
+      "tag": "data/kyron.sqlite",
+      "pos": [1290, 160],
+      "size": [180, 68]
+    },
+    {
+      "id": "db_core_tables",
+      "type": "database",
+      "label": "Core Catalog Entities",
+      "sublabel": "profiles, skills, deals, votes",
+      "tag": "ACID Relational Storage",
+      "pos": [1290, 320],
+      "size": [180, 68]
+    },
+    {
+      "id": "db_ledger_tables",
+      "type": "database",
+      "label": "Purchases & Package Store",
+      "sublabel": "user_purchases & skill_packages",
+      "tag": "Encrypted Keys & Content",
+      "pos": [1290, 480],
+      "size": [180, 68]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "External Clients & AI Agent Ecosystem",
+      "wraps": ["ext_browser", "ext_agent_ide", "ext_mock_stripe"]
+    },
+    {
+      "kind": "region",
+      "label": "Client Presentation Tier (React 19 SPA)",
+      "wraps": ["ui_catalog", "ui_detail_buy", "ui_creator_sell", "ui_mcp_hub", "ui_auth_context"]
+    },
+    {
+      "kind": "security-group",
+      "label": "Edge Gateway & Routing Tier",
+      "wraps": ["vite_dev_proxy", "auth_middleware"]
+    },
+    {
+      "kind": "region",
+      "label": "KYRON Core Application & Domain Services (Express 4)",
+      "wraps": ["express_server", "svc_skills", "svc_creator", "mcp_gateway"]
+    },
+    {
+      "kind": "security-group",
+      "label": "Security Threat Engine & Autonomous Tool Dispatch",
+      "wraps": ["svc_purchases", "sec_scanner", "mcp_tools"]
+    },
+    {
+      "kind": "region",
+      "label": "SQLite Persistence Tier (WAL)",
+      "wraps": ["db_sqlite", "db_core_tables", "db_ledger_tables"]
+    }
+  ],
+  "connections": [
+    { "id": "e1", "from": "ext_browser", "to": "ui_detail_buy", "label": "User Interaction", "variant": "emphasis", "fromSide": "right", "toSide": "left" },
+    { "id": "e2", "from": "ext_agent_ide", "to": "ui_mcp_hub", "label": "Inspect MCP Spec", "variant": "default", "fromSide": "right", "toSide": "left" },
+    { "id": "e3", "from": "ext_mock_stripe", "to": "ui_auth_context", "label": "Credit Simulation", "variant": "dashed", "fromSide": "right", "toSide": "left" },
+
+    { "id": "e4", "from": "ui_detail_buy", "to": "vite_dev_proxy", "label": "HTTP Requests", "variant": "default", "fromSide": "right", "toSide": "left" },
+    { "id": "e5", "from": "ui_auth_context", "to": "auth_middleware", "label": "Bearer JWT", "variant": "security", "fromSide": "right", "toSide": "left" },
+
+    { "id": "e6", "from": "vite_dev_proxy", "to": "express_server", "label": "Proxy to :3000", "variant": "emphasis", "fromSide": "right", "toSide": "left" },
+    { "id": "e7", "from": "auth_middleware", "to": "express_server", "label": "User Session", "variant": "security", "fromSide": "right", "toSide": "left" },
+
+    { "id": "e8", "from": "express_server", "to": "svc_skills", "label": "/api/skills", "variant": "default", "fromSide": "top", "toSide": "bottom" },
+    { "id": "e9", "from": "express_server", "to": "svc_creator", "label": "/api/creator", "variant": "default", "fromSide": "bottom", "toSide": "top" },
+    { "id": "e10", "from": "express_server", "to": "mcp_gateway", "label": "/api/mcp", "variant": "emphasis", "fromSide": "bottom", "toSide": "top" },
+
+    { "id": "e11", "from": "express_server", "to": "svc_purchases", "label": "Purchase Flow", "variant": "emphasis", "fromSide": "right", "toSide": "left" },
+    { "id": "e12", "from": "svc_creator", "to": "sec_scanner", "label": "AST Threat Scan", "variant": "security", "fromSide": "right", "toSide": "left" },
+    { "id": "e13", "from": "mcp_gateway", "to": "mcp_tools", "label": "tools/call", "variant": "emphasis", "fromSide": "right", "toSide": "left" },
+
+    { "id": "e14", "from": "svc_purchases", "to": "db_sqlite", "label": "Balance Deduct", "variant": "emphasis", "fromSide": "right", "toSide": "left" },
+    { "id": "e15", "from": "sec_scanner", "to": "db_core_tables", "label": "Audit Findings", "variant": "security", "fromSide": "right", "toSide": "left" },
+    { "id": "e16", "from": "mcp_tools", "to": "db_ledger_tables", "label": "Package Access", "variant": "default", "fromSide": "right", "toSide": "left" },
+
+    { "id": "e17", "from": "db_sqlite", "to": "db_core_tables", "label": "Manage Schema", "variant": "default", "fromSide": "bottom", "toSide": "top" },
+    { "id": "e18", "from": "db_core_tables", "to": "db_ledger_tables", "label": "FK Constraints", "variant": "default", "fromSide": "bottom", "toSide": "top" }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Client & Presentation Architecture",
+      "items": [
+        "React 19 SPA running on port 5173 with custom pushState RouterContext",
+        "Persistent AuthContext managing JWT in localStorage with demo 1-click accounts",
+        "Interactive Creator Earnings Calculator dynamically modeling 70% net revenue split",
+        "McpHubPage provides live JSON-RPC testing sandbox and copyable agent configs"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Gateway & Domain Execution Engine",
+      "items": [
+        "Express 4 server running on port 3000 proxied seamlessly through Vite",
+        "Stateless HMAC-SHA256 JWT auth with bcrypt salt rounds 10",
+        "Domain routing separates catalog discovery, purchasing, and creator studios",
+        "Native Model Context Protocol (MCP) streaming endpoint exposing 5 agent tools"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Security Threat Engine & Data Persistence",
+      "items": [
+        "8-Point static & heuristic scanner evaluates prompt injections, disk mutations, eval",
+        "Automated audit logs per rule persisted in security_audit_logs with pass/fail grades",
+        "Node 22 native node:sqlite (DatabaseSync) engine operating in WAL journal mode",
+        "9 Relational tables with strict foreign keys, entitlement checks, and atomic transactions"
+      ]
+    }
+  ]
+}

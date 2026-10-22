@@ -140,20 +140,20 @@ router.post('/', async (req: Request, res: Response) => {
           sql += ` ORDER BY s.net_votes DESC LIMIT ?`;
           queryParams.push(Number(limit));
 
-          const skills = db.prepare(sql).all(...queryParams) as any[];
+          const skills = await db.all(sql, queryParams) as any[];
 
           const formatted = skills.map(s => ({
             id: s.id,
             name: s.name,
             slug: s.slug,
             summary: s.summary,
-            price_usd: s.discount_percent ? Number((s.price * (1 - s.discount_percent / 100)).toFixed(2)) : s.price,
-            original_price: s.discount_percent ? s.price : undefined,
-            discount_percent: s.discount_percent || undefined,
+            price_usd: s.discount_percent ? Number((Number(s.price) * (1 - Number(s.discount_percent) / 100)).toFixed(2)) : Number(s.price),
+            original_price: s.discount_percent ? Number(s.price) : undefined,
+            discount_percent: s.discount_percent ? Number(s.discount_percent) : undefined,
             pricing_type: s.pricing_type,
             creator: s.creator_name,
-            rating: s.average_rating,
-            installs: s.install_count,
+            rating: Number(s.average_rating),
+            installs: Number(s.install_count),
             security_verified: s.security_status === 'pass'
           }));
 
@@ -174,13 +174,13 @@ router.post('/', async (req: Request, res: Response) => {
 
         case 'get_skill_details': {
           const { slug_or_id } = args;
-          const skill = db.prepare(`
+          const skill = await db.get(`
             SELECT s.*, p.display_name as creator_name, d.discount_percent, d.expires_at as deal_expires_at
             FROM skills s
             JOIN profiles p ON s.creator_id = p.id
             LEFT JOIN skill_deals d ON d.skill_id = s.id AND d.is_active = 1 AND datetime(d.expires_at) > datetime('now')
             WHERE s.slug = ? OR s.id = ?
-          `).get(slug_or_id, slug_or_id) as any;
+          `, [slug_or_id, slug_or_id]) as any;
 
           if (!skill) {
             res.json({ jsonrpc: '2.0', id, error: { code: -32001, message: `Skill "${slug_or_id}" not found` } });
@@ -202,10 +202,10 @@ router.post('/', async (req: Request, res: Response) => {
                     description: skill.description,
                     pricing: {
                       type: skill.pricing_type,
-                      regular_price: skill.price,
+                      regular_price: Number(skill.price),
                       deal: skill.discount_percent ? {
-                        discount_percent: skill.discount_percent,
-                        discounted_price: Number((skill.price * (1 - skill.discount_percent / 100)).toFixed(2)),
+                        discount_percent: Number(skill.discount_percent),
+                        discounted_price: Number((Number(skill.price) * (1 - Number(skill.discount_percent) / 100)).toFixed(2)),
                         expires_at: skill.deal_expires_at
                       } : null
                     },
@@ -222,14 +222,15 @@ router.post('/', async (req: Request, res: Response) => {
 
         case 'install_skill': {
           const { skill_id, auth_token } = args;
-          const skill = db.prepare(`SELECT * FROM skills WHERE id = ? OR slug = ?`).get(skill_id, skill_id) as any;
+          const skill = await db.get(`SELECT * FROM skills WHERE id = ? OR slug = ?`, [skill_id, skill_id]) as any;
 
           if (!skill) {
             res.json({ jsonrpc: '2.0', id, error: { code: -32001, message: `Skill "${skill_id}" not found` } });
             return;
           }
 
-          const isFree = skill.pricing_type === 'free' || skill.price === 0;
+          const skillPrice = Number(skill.price);
+          const isFree = skill.pricing_type === 'free' || skillPrice === 0;
 
           // If paid, check authentication and entitlement
           let userId: string | null = null;
@@ -252,8 +253,8 @@ router.post('/', async (req: Request, res: Response) => {
                       text: JSON.stringify({
                         status: 'payment_approval_required',
                         skill_name: skill.name,
-                        price_usd: skill.price,
-                        message: `This is a paid skill ($${skill.price.toFixed(2)}). Please prompt user for approval and supply valid auth_token with credit balance.`
+                        price_usd: skillPrice,
+                        message: `This is a paid skill ($${skillPrice.toFixed(2)}). Please prompt user for approval and supply valid auth_token with credit balance.`
                       })
                     }
                   ]
@@ -263,27 +264,30 @@ router.post('/', async (req: Request, res: Response) => {
             }
 
             // Check purchase entitlement
-            const purchase = db.prepare(`SELECT id FROM user_purchases WHERE user_id = ? AND skill_id = ?`).get(userId, skill.id);
+            const purchase = await db.get(`SELECT id FROM user_purchases WHERE user_id = ? AND skill_id = ?`, [userId, skill.id]);
             if (!purchase) {
               // Attempt credit purchase
-              const profile = db.prepare(`SELECT credit_balance, is_unlimited_credit_user FROM profiles WHERE id = ?`).get(userId) as any;
-              if (profile && (profile.is_unlimited_credit_user === 1 || profile.credit_balance >= skill.price)) {
+              const profile = await db.get(`SELECT credit_balance, is_unlimited_credit_user FROM profiles WHERE id = ?`, [userId]) as any;
+              const creditBalance = Number(profile?.credit_balance || 0);
+
+              if (profile && (profile.is_unlimited_credit_user === 1 || creditBalance >= skillPrice)) {
                 if (profile.is_unlimited_credit_user !== 1) {
-                  db.prepare(`UPDATE profiles SET credit_balance = credit_balance - ? WHERE id = ?`).run(skill.price, userId);
+                  await db.run(`UPDATE profiles SET credit_balance = credit_balance - ? WHERE id = ?`, [skillPrice, userId]);
                 }
                 const now = new Date().toISOString();
-                db.prepare(`
+                await db.run(`
                   INSERT INTO user_purchases (id, user_id, skill_id, amount_paid, license_key, purchased_at, status)
                   VALUES (?, ?, ?, ?, ?, ?, 'completed')
-                `).run('pur_' + Date.now(), userId, skill.id, skill.price, 'KYRON-MCP-' + Date.now(), now);
-                db.prepare(`UPDATE skills SET install_count = install_count + 1 WHERE id = ?`).run(skill.id);
+                  ON CONFLICT (id) DO NOTHING
+                `, ['pur_' + Date.now(), userId, skill.id, skillPrice, 'KYRON-MCP-' + Date.now(), now]);
+                await db.run(`UPDATE skills SET install_count = install_count + 1 WHERE id = ?`, [skill.id]);
               } else {
                 res.json({
                   jsonrpc: '2.0',
                   id,
                   error: {
                     code: -32002,
-                    message: `Insufficient KYRON credits to acquire "${skill.name}". Required: $${skill.price.toFixed(2)}.`
+                    message: `Insufficient KYRON credits to acquire "${skill.name}". Required: $${skillPrice.toFixed(2)}.`
                   }
                 });
                 return;
@@ -291,11 +295,11 @@ router.post('/', async (req: Request, res: Response) => {
             }
           } else {
             // Free skill: log download
-            db.prepare(`UPDATE skills SET install_count = install_count + 1 WHERE id = ?`).run(skill.id);
+            await db.run(`UPDATE skills SET install_count = install_count + 1 WHERE id = ?`, [skill.id]);
           }
 
           // Fetch package instructions
-          const pkg = db.prepare(`SELECT skill_md_content FROM skill_packages WHERE skill_id = ?`).get(skill.id) as any;
+          const pkg = await db.get(`SELECT skill_md_content FROM skill_packages WHERE skill_id = ?`, [skill.id]) as any;
           const instructions = pkg ? pkg.skill_md_content : `# ${skill.name}\n\n${skill.description}`;
 
           res.json({
@@ -333,12 +337,12 @@ router.post('/', async (req: Request, res: Response) => {
             return;
           }
 
-          const mySkills = db.prepare(`
+          const mySkills = await db.all(`
             SELECT s.id, s.name, s.slug, s.current_version, p.license_key, p.purchased_at
             FROM user_purchases p
             JOIN skills s ON p.skill_id = s.id
             WHERE p.user_id = ? AND p.status = 'completed'
-          `).all(userId);
+          `, [userId]);
 
           res.json({
             jsonrpc: '2.0',

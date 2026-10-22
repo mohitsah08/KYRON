@@ -9,7 +9,7 @@
     "dev:server": "tsx watch server/index.ts",
     "dev:client": "vite",
     "build:client": "vite build",
-    "build:server": "mkdir -p dist/server/db && cp server/db/schema*.sql dist/server/db/ && esbuild server/index.ts --bundle --platform=node --format=esm --packages=external --outfile=dist/server/index.js",
+    "build:server": "mkdir -p dist/server/db && cp server/db/schema*.sql dist/server/db/ && esbuild server/index.ts --bundle --platform=node --format=esm --packages=external --outfile=dist/server/index.js && esbuild server/serverless.ts --bundle --platform=node --format=esm --packages=external --outfile=api/index.js",
     "build": "npm run build:client && npm run build:server",
     "db:migrate": "tsx scripts/migrate-to-postgres.ts",
     "start": "node dist/server/index.js",

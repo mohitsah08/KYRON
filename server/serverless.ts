@@ -1,5 +1,5 @@
-import { app } from '../server/app.ts';
-import { initDatabase } from '../server/db/database.ts';
+import { app } from './app.ts';
+import { initDatabase } from './db/database.ts';
 
 let initialized = false;
 

@@ -1,0 +1,48 @@
+{
+  "name": "kyron",
+  "version": "1.0.0",
+  "description": "KYRON - AI Agent Skill.md Marketplace and Runtime Gateway",
+  "type": "module",
+  "main": "server/index.ts",
+  "scripts": {
+    "dev": "concurrently -k -p \"[{name}]\" -n \"SERVER,CLIENT\" -c \"cyan.bold,magenta.bold\" \"npm run dev:server\" \"npm run dev:client\"",
+    "dev:server": "tsx watch server/index.ts",
+    "dev:client": "vite",
+    "build:client": "vite build",
+    "build:server": "mkdir -p dist/server/db && cp server/db/schema.sql dist/server/db/ && esbuild server/index.ts --bundle --platform=node --format=esm --packages=external --outfile=dist/server/index.js",
+    "build": "npm run build:client && npm run build:server",
+    "start": "node dist/server/index.js",
+    "test": "NODE_ENV=test TEST_MODE=true tsx --test --test-concurrency=1 tests/**/*.test.ts"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "clsx": "^2.1.1",
+    "cors": "^2.8.5",
+    "dotenv": "^17.3.1",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.3",
+    "lucide-react": "^1.16.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "tailwind-merge": "^3.5.0",
+    "uuid": "^13.0.0"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^3.0.0",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.0",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "^22.13.10",
+    "@types/react": "^19.0.10",
+    "@types/react-dom": "^19.0.4",
+    "@types/uuid": "^10.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.21",
+    "concurrently": "^10.0.6",
+    "postcss": "^8.5.3",
+    "tailwindcss": "^3.4.17",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.2",
+    "vite": "^6.2.1"
+  }
+}

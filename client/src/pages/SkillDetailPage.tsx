@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter, Link } from '../context/RouterContext.tsx';
 import { useAuth } from '../context/AuthContext.tsx';
+import { loginPathFor } from '../utils/authHelpers.ts';
 import { api } from '../utils/api.ts';
 import { Skill, Profile, SkillDeal, SecurityAuditRule, SkillReview, UserPurchase } from '../types.ts';
 import { 
@@ -11,18 +12,30 @@ import {
   Copy, 
   Check, 
   Download, 
-  Terminal, 
+  FolderArchive,
+  FileText,
+  FileCode,
   ShieldCheck, 
   CheckCircle2, 
-  ExternalLink,
   Lock,
   CloudOff,
   Cpu,
   GitBranch,
   ArrowRight,
-  AlertCircle,
-  MessageSquare
+  AlertTriangle,
+  Bot,
+  Info
 } from 'lucide-react';
+
+type TargetAgent = 'claude' | 'codex' | 'cursor' | 'antigravity' | 'generic';
+
+const AGENT_OPTIONS: { id: TargetAgent; label: string; icon: string; path: string; desc: string }[] = [
+  { id: 'claude', label: 'Claude Code', icon: '🤖', path: '.claude/skills/', desc: 'Claude Code CLI project skills directory' },
+  { id: 'codex', label: 'OpenAI Codex', icon: '⚡', path: '.codex/skills/', desc: 'Codex project skills directory' },
+  { id: 'cursor', label: 'Cursor', icon: '🖱️', path: '.cursor/skills/', desc: 'Cursor project rules & skills' },
+  { id: 'antigravity', label: 'Antigravity', icon: '🚀', path: '.agents/skills/', desc: 'Google Antigravity workspace skills root' },
+  { id: 'generic', label: 'Generic Agent', icon: '🧩', path: '.agents/skills/', desc: 'Standard Open Agent Skills directory' }
+];
 
 export function SkillDetailPage({ slug }: { slug: string }) {
   const { navigate } = useRouter();
@@ -41,11 +54,15 @@ export function SkillDetailPage({ slug }: { slug: string }) {
   } | null>(null);
 
   const [packageData, setPackageData] = useState<any>(null);
+  const [selectedAgent, setSelectedAgent] = useState<TargetAgent>('generic');
+  const [promptText, setPromptText] = useState<string>('');
+  const [loadingPrompt, setLoadingPrompt] = useState<boolean>(false);
+  const [copiedPrompt, setCopiedPrompt] = useState(false);
+  const [copiedPath, setCopiedPath] = useState(false);
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [copiedCli, setCopiedCli] = useState(false);
-  const [copiedMcp, setCopiedMcp] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'how-it-works' | 'permissions' | 'sample-io' | 'security' | 'reviews'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'prompt-preview' | 'package-files' | 'permissions' | 'security' | 'reviews'>('overview');
   const [actionLoading, setActionLoading] = useState(false);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
 
@@ -60,12 +77,12 @@ export function SkillDetailPage({ slug }: { slug: string }) {
       const res = await api.getSkillBySlug(slug);
       setData(res);
 
-      if (res.is_purchased || res.skill.pricing_type === 'free') {
+      if (res.is_purchased || res.skill.pricing_type === 'free' || (user && user.id === res.skill.creator_id)) {
         try {
           const pkg = await api.getSkillPackage(slug);
           setPackageData(pkg);
         } catch {
-          // Allowed to fail if not purchased
+          // Allowed to fail if not authorized
         }
       }
     } catch (err: any) {
@@ -75,9 +92,27 @@ export function SkillDetailPage({ slug }: { slug: string }) {
     }
   };
 
+  const loadPrompt = async (agent: TargetAgent) => {
+    try {
+      setLoadingPrompt(true);
+      const res = await api.getSkillPrompt(slug, agent);
+      setPromptText(res.prompt);
+    } catch (err) {
+      console.warn('Failed to load prompt:', err);
+    } finally {
+      setLoadingPrompt(false);
+    }
+  };
+
   useEffect(() => {
     fetchSkillData();
   }, [slug]);
+
+  useEffect(() => {
+    if (data) {
+      loadPrompt(selectedAgent);
+    }
+  }, [slug, selectedAgent, data?.is_purchased]);
 
   if (loading) {
     return (
@@ -91,7 +126,7 @@ export function SkillDetailPage({ slug }: { slug: string }) {
     return (
       <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-16 text-center space-y-4">
         <div className="text-xl font-bold text-[#171717]">Skill Not Found</div>
-        <p className="text-xs text-[#737373]">{error || 'The requested skill does not exist.'}</p>
+        <p className="text-xs text-[#737373]">{error || 'The requested skill does not exist or is a private draft.'}</p>
         <Link href="/skills" className="inline-flex px-4 py-2 bg-[#171717] text-white text-xs font-medium rounded-lg">
           Back to Marketplace
         </Link>
@@ -101,35 +136,29 @@ export function SkillDetailPage({ slug }: { slug: string }) {
 
   const { skill, creator, deal, security_audit, reviews, user_vote, is_saved, is_purchased } = data;
   const isFree = skill.pricing_type === 'free' || skill.price === 0;
+  const isCreator = user ? user.id === skill.creator_id : false;
+  const isUnlocked = isFree || is_purchased || isCreator;
   const effectivePrice = deal ? skill.price * (1 - deal.discount_percent / 100) : skill.price;
-  const latencyMs = slug.includes('octocode') ? 340 : slug.includes('geo') ? 420 : 38;
 
-  const handleCopyCli = () => {
-    navigator.clipboard.writeText(`kyron connect ${skill.slug}`);
-    setCopiedCli(true);
-    setTimeout(() => setCopiedCli(false), 2000);
+  const currentAgentInfo = AGENT_OPTIONS.find(a => a.id === selectedAgent) || AGENT_OPTIONS[4];
+  const targetInstallPath = `${currentAgentInfo.path}${skill.slug}/`;
+
+  const handleCopyPrompt = () => {
+    if (!promptText) return;
+    navigator.clipboard.writeText(promptText);
+    setCopiedPrompt(true);
+    setTimeout(() => setCopiedPrompt(false), 2000);
   };
 
-  const handleCopyMcp = () => {
-    const config = JSON.stringify({
-      mcpServers: {
-        [skill.slug]: {
-          command: "npx",
-          args: ["-y", `@kyron/${skill.slug}@latest`],
-          env: {
-            KYRON_API_KEY: user ? `kyr_live_${user.id.slice(0, 8)}` : "YOUR_API_KEY"
-          }
-        }
-      }
-    }, null, 2);
-    navigator.clipboard.writeText(config);
-    setCopiedMcp(true);
-    setTimeout(() => setCopiedMcp(false), 2000);
+  const handleCopyPath = () => {
+    navigator.clipboard.writeText(targetInstallPath);
+    setCopiedPath(true);
+    setTimeout(() => setCopiedPath(false), 2000);
   };
 
   const handleVote = async () => {
     if (!user) {
-      navigate('/auth');
+      navigate(loginPathFor(window.location.pathname + window.location.search));
       return;
     }
     try {
@@ -147,7 +176,7 @@ export function SkillDetailPage({ slug }: { slug: string }) {
 
   const handleSave = async () => {
     if (!user) {
-      navigate('/auth');
+      navigate(loginPathFor(window.location.pathname + window.location.search));
       return;
     }
     try {
@@ -163,7 +192,7 @@ export function SkillDetailPage({ slug }: { slug: string }) {
 
   const handleAcquire = async () => {
     if (!user) {
-      navigate('/auth');
+      navigate(loginPathFor(window.location.pathname + window.location.search));
       return;
     }
 
@@ -171,7 +200,7 @@ export function SkillDetailPage({ slug }: { slug: string }) {
       setActionLoading(true);
       try {
         await api.installFreeSkill(skill.id);
-        setActionMessage('Skill successfully installed in your workspace!');
+        setActionMessage('Skill unlocked! You can now download the ZIP, Markdown, and prompt.');
         await fetchSkillData();
       } catch (err: any) {
         setActionMessage(`Error: ${err.message}`);
@@ -188,7 +217,7 @@ export function SkillDetailPage({ slug }: { slug: string }) {
       try {
         await api.purchaseWithCredit(skill.id);
         await refreshUser();
-        setActionMessage('Skill unlocked and license registered to your account!');
+        setActionMessage('Purchase completed! Package download & agent prompt unlocked.');
         await fetchSkillData();
       } catch (err: any) {
         setActionMessage(`Error: ${err.message}`);
@@ -201,7 +230,7 @@ export function SkillDetailPage({ slug }: { slug: string }) {
   const handleReviewSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) {
-      navigate('/auth');
+      navigate(loginPathFor(window.location.pathname + window.location.search));
       return;
     }
     if (!reviewComment.trim()) return;
@@ -259,13 +288,13 @@ export function SkillDetailPage({ slug }: { slug: string }) {
                   <div className="flex flex-wrap items-center gap-2 mb-2">
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-mono uppercase tracking-wider bg-[#FFF4EB] text-[#F97316] border border-[#F97316]/20 font-semibold">
                       <ShieldCheck className="w-3.5 h-3.5" />
-                      Verified MCP Server
+                      Agent Skills Standard
                     </span>
                     <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-mono text-[#737373] bg-[#F8F8F7] border border-[#E8E8E6]">
-                      v{skill.current_version} (Stable)
+                      v{skill.current_version || '1.0.0'}
                     </span>
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-mono text-[#15803D] bg-emerald-50 border border-emerald-200">
-                      ● {latencyMs}ms latency
+                      License: {skill.license || 'MIT'}
                     </span>
                   </div>
 
@@ -297,16 +326,16 @@ export function SkillDetailPage({ slug }: { slug: string }) {
               {/* Capability Quick Chips */}
               <div className="mt-5 flex flex-wrap gap-2">
                 <span className="text-xs font-mono px-2.5 py-1 bg-[#F8F8F7] border border-[#E8E8E6] rounded text-[#737373]">
-                  mcp:protocol-1.0
+                  format:agent-skills-1.0
                 </span>
                 <span className="text-xs font-mono px-2.5 py-1 bg-[#F8F8F7] border border-[#E8E8E6] rounded text-[#737373]">
-                  ast:structural-engine
+                  primary:SKILL.md
                 </span>
                 <span className="text-xs font-mono px-2.5 py-1 bg-[#F8F8F7] border border-[#E8E8E6] rounded text-[#737373]">
-                  safety:hermetic-sandbox
+                  safety:untrusted-exec-blocked
                 </span>
                 <span className="text-xs font-mono px-2.5 py-1 bg-[#F8F8F7] border border-[#E8E8E6] rounded text-[#737373]">
-                  runtime:zero-exfiltration
+                  scope:hermetic-install
                 </span>
               </div>
             </div>
@@ -317,10 +346,10 @@ export function SkillDetailPage({ slug }: { slug: string }) {
               <div className="flex items-center border-b border-[#E8E8E6] px-4 bg-[#F8F8F7]/60 overflow-x-auto no-scrollbar">
                 {[
                   { id: 'overview', label: 'Overview' },
-                  { id: 'how-it-works', label: 'How It Works' },
-                  { id: 'permissions', label: 'Requirements & Permissions' },
-                  { id: 'sample-io', label: 'Sample Input / Output' },
-                  { id: 'security', label: `Security & Audit (${security_audit.length})` },
+                  { id: 'prompt-preview', label: 'AI Installation Prompt' },
+                  { id: 'package-files', label: 'Package Structure' },
+                  { id: 'permissions', label: 'Security & Constraints' },
+                  { id: 'security', label: `Automated Scan (${security_audit.length})` },
                   { id: 'reviews', label: `Reviews (${reviews.length})` },
                 ].map((t) => (
                   <button
@@ -341,188 +370,206 @@ export function SkillDetailPage({ slug }: { slug: string }) {
               {activeTab === 'overview' && (
                 <div className="p-6 sm:p-8 space-y-8">
                   <div>
-                    <h3 className="text-base font-bold text-[#171717] mb-2">Architectural Capabilities</h3>
+                    <h3 className="text-base font-bold text-[#171717] mb-2">Agent Skill Specification</h3>
                     <p className="text-xs sm:text-sm text-[#737373] leading-relaxed">
-                      {skill.name} executes deterministic operations in memory to plan atomic multi-file refactor cascades. Unlike generic LLM coding agents, verified Kyron skills perform deterministic graph traversals to guarantee compatibility before emitting synthetic operations.
+                      {skill.name} follows the standard Open Agent Skills specification. It packages instructions in a standalone <code className="text-[#F97316] font-mono">SKILL.md</code> file along with supporting references, templates, and scripts designed for human and AI inspection.
                     </p>
                   </div>
 
-                  {/* Bento Metric Cards */}
+                  {/* Highlights Grid */}
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div className="p-4 bg-[#F8F8F7] border border-[#E8E8E6] rounded-lg">
-                      <div className="text-[11px] font-mono text-[#737373] mb-1">EXECUTION LATENCY</div>
-                      <div className="text-2xl font-bold text-[#171717] font-mono">{latencyMs}<span className="text-sm font-normal text-[#737373]">ms</span></div>
-                      <div className="text-[11px] text-[#15803D] mt-1 font-medium">99th percentile across runs</div>
+                      <div className="text-[11px] font-mono text-[#737373] mb-1">PACKAGE FORMAT</div>
+                      <div className="text-xl font-bold text-[#171717] font-mono">ZIP + MD</div>
+                      <div className="text-[11px] text-[#15803D] mt-1 font-medium">Standalone or bundled</div>
                     </div>
                     <div className="p-4 bg-[#F8F8F7] border border-[#E8E8E6] rounded-lg">
-                      <div className="text-[11px] font-mono text-[#737373] mb-1">DETERMINISTIC RATE</div>
-                      <div className="text-2xl font-bold text-[#171717] font-mono">99.98%</div>
-                      <div className="text-[11px] text-[#737373] mt-1">Zero regression verified</div>
+                      <div className="text-[11px] font-mono text-[#737373] mb-1">TARGET AGENTS</div>
+                      <div className="text-xl font-bold text-[#171717] font-mono">5 Supported</div>
+                      <div className="text-[11px] text-[#737373] mt-1">Claude, Codex, Cursor, etc.</div>
                     </div>
                     <div className="p-4 bg-[#F8F8F7] border border-[#E8E8E6] rounded-lg">
-                      <div className="text-[11px] font-mono text-[#737373] mb-1">SANDBOX RATING</div>
-                      <div className="text-2xl font-bold text-[#171717] font-mono">Tier 0</div>
-                      <div className="text-[11px] text-[#737373] mt-1">Hermetic enclave compliance</div>
+                      <div className="text-[11px] font-mono text-[#737373] mb-1">SECURITY AUDIT</div>
+                      <div className="text-xl font-bold text-[#171717] font-mono">Tier 0 Pass</div>
+                      <div className="text-[11px] text-[#15803D] mt-1 font-medium">8/8 Automated Checks</div>
                     </div>
                   </div>
 
-                  {/* Operational Primitives */}
+                  {/* Supported Coding Agents */}
                   <div>
-                    <h4 className="text-sm font-bold text-[#171717] mb-4">Core Operational Primitives</h4>
+                    <h4 className="text-sm font-bold text-[#171717] mb-4">Supported Coding Agent Environments</h4>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div className="p-4 border border-[#E8E8E6] rounded-lg hover:border-[#D4D4D0] transition-colors">
-                        <div className="flex items-center gap-2 mb-1.5">
-                          <Cpu className="w-4 h-4 text-[#F97316]" />
-                          <span className="text-xs font-semibold text-[#171717]">Symbol Graph Traversal</span>
+                      {AGENT_OPTIONS.map((agent) => (
+                        <div 
+                          key={agent.id}
+                          onClick={() => setSelectedAgent(agent.id)}
+                          className={`p-4 border rounded-lg cursor-pointer transition-all ${
+                            selectedAgent === agent.id
+                              ? 'border-[#F97316] bg-[#FFF4EB]/30 shadow-xs'
+                              : 'border-[#E8E8E6] hover:border-[#D4D4D0] bg-white'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between mb-1.5">
+                            <span className="text-xs font-semibold text-[#171717] flex items-center gap-1.5">
+                              <span>{agent.icon}</span>
+                              <span>{agent.label}</span>
+                            </span>
+                            <span className="text-[10px] font-mono text-[#737373]">{agent.path}</span>
+                          </div>
+                          <p className="text-xs text-[#737373]">{agent.desc}</p>
                         </div>
-                        <p className="text-xs text-[#737373]">Queries full symbol graphs in Monorepos to resolve transitive import paths with zero broken callers.</p>
-                      </div>
-                      <div className="p-4 border border-[#E8E8E6] rounded-lg hover:border-[#D4D4D0] transition-colors">
-                        <div className="flex items-center gap-2 mb-1.5">
-                          <GitBranch className="w-4 h-4 text-[#F97316]" />
-                          <span className="text-xs font-semibold text-[#171717]">Deterministic Transformations</span>
-                        </div>
-                        <p className="text-xs text-[#737373]">Produces structural AST transforms rather than token stream replacements, eliminating syntax hallucinations.</p>
-                      </div>
-                      <div className="p-4 border border-[#E8E8E6] rounded-lg hover:border-[#D4D4D0] transition-colors">
-                        <div className="flex items-center gap-2 mb-1.5">
-                          <ShieldCheck className="w-4 h-4 text-[#F97316]" />
-                          <span className="text-xs font-semibold text-[#171717]">Ephemeral Micro-VM</span>
-                        </div>
-                        <p className="text-xs text-[#737373]">Spins up clean verification containers to guarantee zero regressions before submitting patch proposals.</p>
-                      </div>
-                      <div className="p-4 border border-[#E8E8E6] rounded-lg hover:border-[#D4D4D0] transition-colors">
-                        <div className="flex items-center gap-2 mb-1.5">
-                          <Terminal className="w-4 h-4 text-[#F97316]" />
-                          <span className="text-xs font-semibold text-[#171717]">Standard Stdio / SSE MCP</span>
-                        </div>
-                        <p className="text-xs text-[#737373]">Conforms strictly to Model Context Protocol 1.0 JSON-RPC specification across all clients.</p>
-                      </div>
+                      ))}
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* TAB 2: How It Works */}
-              {activeTab === 'how-it-works' && (
+              {/* TAB 2: AI Installation Prompt */}
+              {activeTab === 'prompt-preview' && (
                 <div className="p-6 sm:p-8 space-y-6">
-                  <h3 className="text-base font-bold text-[#171717]">Autonomous Agent Execution Pipeline</h3>
-                  <p className="text-xs sm:text-sm text-[#737373]">Every invocation passes through an isolated 4-stage validation and synthesis cascade.</p>
-                  
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-2">
-                    <div className="p-4 bg-[#F8F8F7] border border-[#E8E8E6] rounded-lg">
-                      <span className="font-mono text-xs text-[#F97316] font-semibold">STAGE 01</span>
-                      <h5 className="text-xs font-bold text-[#171717] mt-1 mb-1.5">Parse AST</h5>
-                      <p className="text-xs text-[#737373]">Builds in-memory structural syntax trees of candidate files using Tree-sitter.</p>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                      <h3 className="text-base font-bold text-[#171717]">Dynamic AI Agent Installation Prompt</h3>
+                      <p className="text-xs text-[#737373] mt-0.5">
+                        Provide this prompt and the downloaded ZIP to your AI coding agent.
+                      </p>
                     </div>
-                    <div className="p-4 bg-[#F8F8F7] border border-[#E8E8E6] rounded-lg">
-                      <span className="font-mono text-xs text-[#F97316] font-semibold">STAGE 02</span>
-                      <h5 className="text-xs font-bold text-[#171717] mt-1 mb-1.5">Formulate Diff</h5>
-                      <p className="text-xs text-[#737373]">Calculates minimal unified patch deltas while preserving comment trees and formatting.</p>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={handleCopyPrompt}
+                        className="px-3 py-1.5 bg-[#171717] hover:bg-black text-white text-xs font-medium rounded-lg flex items-center gap-1.5 transition-colors"
+                      >
+                        {copiedPrompt ? <Check className="w-3.5 h-3.5 text-[#15803D]" /> : <Copy className="w-3.5 h-3.5" />}
+                        <span>{copiedPrompt ? 'Copied Prompt' : 'Copy Prompt'}</span>
+                      </button>
+                      <a
+                        href={api.getPromptDownloadUrl(skill.slug, selectedAgent)}
+                        download
+                        className="px-3 py-1.5 bg-white border border-[#E8E8E6] hover:bg-[#F8F8F7] text-xs font-medium text-[#171717] rounded-lg flex items-center gap-1.5 transition-colors"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        <span>Download .md</span>
+                      </a>
                     </div>
-                    <div className="p-4 bg-[#F8F8F7] border border-[#E8E8E6] rounded-lg">
-                      <span className="font-mono text-xs text-[#F97316] font-semibold">STAGE 03</span>
-                      <h5 className="text-xs font-bold text-[#171717] mt-1 mb-1.5">Sandbox Verification</h5>
-                      <p className="text-xs text-[#737373]">Executes affected test suites in a zero-network micro-VM sandbox container.</p>
+                  </div>
+
+                  {/* Target agent selector pills */}
+                  <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                    <span className="text-xs font-mono text-[#737373] shrink-0">Target Agent:</span>
+                    {AGENT_OPTIONS.map((agent) => (
+                      <button
+                        key={agent.id}
+                        onClick={() => setSelectedAgent(agent.id)}
+                        className={`px-2.5 py-1 rounded-md text-xs font-mono whitespace-nowrap transition-colors ${
+                          selectedAgent === agent.id
+                            ? 'bg-[#171717] text-white font-medium'
+                            : 'bg-[#F8F8F7] text-[#737373] hover:text-[#171717] border border-[#E8E8E6]'
+                        }`}
+                      >
+                        {agent.icon} {agent.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Prompt Text Container */}
+                  <div className="relative bg-[#171717] rounded-lg border border-[#333333] text-white overflow-hidden">
+                    <div className="px-4 py-2 bg-[#222222] border-b border-[#333333] flex items-center justify-between text-xs text-[#A3A3A3] font-mono">
+                      <span>Installation Target: {currentAgentInfo.path}{skill.slug}/</span>
+                      <span className="text-[10px] text-[#A3A3A3]">Markdown Format</span>
                     </div>
-                    <div className="p-4 bg-[#F8F8F7] border border-[#E8E8E6] rounded-lg">
-                      <span className="font-mono text-xs text-[#F97316] font-semibold">STAGE 04</span>
-                      <h5 className="text-xs font-bold text-[#171717] mt-1 mb-1.5">Propose PR</h5>
-                      <p className="text-xs text-[#737373]">Emits clean JSON-RPC formatted tool response or validated multi-file commit tree.</p>
-                    </div>
+                    <pre className="p-4 overflow-x-auto text-[#CCCCCC] font-mono text-xs leading-relaxed max-h-[460px] whitespace-pre-wrap">
+                      {loadingPrompt ? 'Generating installation prompt...' : (promptText || 'No prompt available.')}
+                    </pre>
                   </div>
                 </div>
               )}
 
-              {/* TAB 3: Permissions & Requirements */}
+              {/* TAB 3: Package Structure */}
+              {activeTab === 'package-files' && (
+                <div className="p-6 sm:p-8 space-y-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-base font-bold text-[#171717]">Skill Package Hierarchy</h3>
+                      <p className="text-xs text-[#737373]">Directory tree contained inside {skill.slug}.zip</p>
+                    </div>
+                    {isUnlocked && (
+                      <a
+                        href={api.getZipDownloadUrl(skill.slug)}
+                        download
+                        className="px-3 py-1.5 bg-[#F97316] hover:bg-[#EA580C] text-white text-xs font-medium rounded-lg flex items-center gap-1.5"
+                      >
+                        <FolderArchive className="w-3.5 h-3.5" />
+                        <span>Download ZIP</span>
+                      </a>
+                    )}
+                  </div>
+
+                  <div className="p-4 bg-[#F8F8F7] border border-[#E8E8E6] rounded-lg font-mono text-xs space-y-2 text-[#171717]">
+                    <div className="flex items-center gap-2 font-bold text-[#F97316]">
+                      <FolderArchive className="w-4 h-4" />
+                      <span>{skill.slug}/</span>
+                    </div>
+                    <div className="ml-6 space-y-2 border-l-2 border-[#E8E8E6] pl-4">
+                      <div className="flex items-center gap-2 text-[#171717]">
+                        <FileCode className="w-4 h-4 text-[#F97316]" />
+                        <span className="font-semibold">SKILL.md</span>
+                        <span className="text-[10px] text-[#737373] bg-white border border-[#E8E8E6] px-1.5 py-0.5 rounded">Primary Specification</span>
+                      </div>
+                      {packageData?.files && Object.keys(packageData.files).filter((k: string) => k !== 'SKILL.md').map((file: string) => (
+                        <div key={file} className="flex items-center gap-2 text-[#525252]">
+                          <FileText className="w-4 h-4 text-[#737373]" />
+                          <span>{file}</span>
+                        </div>
+                      ))}
+                      <div className="flex items-center gap-2 text-[#737373]">
+                        <FileText className="w-4 h-4 text-[#737373]" />
+                        <span>LICENSE.txt</span>
+                        <span className="text-[10px] text-[#A3A3A3]">({skill.license || 'MIT'})</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {packageData?.skill_md_content && (
+                    <div className="space-y-2">
+                      <h4 className="text-xs font-mono uppercase text-[#737373] font-semibold">SKILL.md Preview</h4>
+                      <pre className="p-4 bg-white border border-[#E8E8E6] rounded-lg text-xs font-mono text-[#171717] overflow-x-auto max-h-72 whitespace-pre-wrap leading-relaxed">
+                        {packageData.skill_md_content}
+                      </pre>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* TAB 4: Security & Constraints */}
               {activeTab === 'permissions' && (
                 <div className="p-6 sm:p-8 space-y-6">
-                  <h3 className="text-base font-bold text-[#171717]">Security, Sandboxing & Protocol Scopes</h3>
-                  <p className="text-xs sm:text-sm text-[#737373]">Adheres to Kyron Strict Enclave guidelines for enterprise workstation deployment.</p>
+                  <h3 className="text-base font-bold text-[#171717]">Safe Execution & Installation Protocol</h3>
+                  <p className="text-xs sm:text-sm text-[#737373]">
+                    KYRON enforces hermetic boundaries. AI coding agents should never execute downloaded scripts automatically without user review.
+                  </p>
 
                   <div className="border border-[#E8E8E6] rounded-lg divide-y divide-[#E8E8E6]">
                     <div className="p-4 flex items-start gap-3.5">
                       <Lock className="w-4 h-4 text-[#15803D] shrink-0 mt-0.5" />
                       <div>
-                        <div className="text-xs font-semibold text-[#171717]">Workspace Read / Write Access</div>
-                        <div className="text-xs text-[#737373] mt-0.5">Filesystem access limited strictly to the designated project root folder. No access to ~/.ssh, credentials, or parent directories.</div>
+                        <div className="text-xs font-semibold text-[#171717]">Hermetic Workspace Scope</div>
+                        <div className="text-xs text-[#737373] mt-0.5">Filesystem access is strictly restricted to designated agent skill folders (<code className="font-mono text-[#171717]">.agents/skills/</code>, <code className="font-mono text-[#171717]">.claude/skills/</code>, etc.). No access to system roots or credentials.</div>
+                      </div>
+                    </div>
+                    <div className="p-4 flex items-start gap-3.5">
+                      <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                      <div>
+                        <div className="text-xs font-semibold text-[#171717]">Zero Automatic Script Execution</div>
+                        <div className="text-xs text-[#737373] mt-0.5">Any packaged scripts (.py, .ts, .sh) are auxiliary reference tools. The generated agent prompt strictly instructs agents never to execute them automatically.</div>
                       </div>
                     </div>
                     <div className="p-4 flex items-start gap-3.5">
                       <CloudOff className="w-4 h-4 text-[#15803D] shrink-0 mt-0.5" />
                       <div>
-                        <div className="text-xs font-semibold text-[#171717]">Zero Outbound Telemetry</div>
-                        <div className="text-xs text-[#737373] mt-0.5">Code files, symbol names, and AST snapshots never leave your local environment. Network sockets are blocked during execution.</div>
+                        <div className="text-xs font-semibold text-[#171717]">Zero Secret Exfiltration</div>
+                        <div className="text-xs text-[#737373] mt-0.5">Skills are statically scanned for network phone-homes, prompt injection tokens, and key sniffers before being published.</div>
                       </div>
-                    </div>
-                    <div className="p-4 flex items-start gap-3.5">
-                      <Cpu className="w-4 h-4 text-[#15803D] shrink-0 mt-0.5" />
-                      <div>
-                        <div className="text-xs font-semibold text-[#171717]">Host Runtime Requirements</div>
-                        <div className="text-xs text-[#737373] mt-0.5">Node.js 20.0+ LTS or Bun 1.1+, 512MB RAM reserve for large workspace AST caches.</div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* TAB 4: Sample Input / Output */}
-              {activeTab === 'sample-io' && (
-                <div className="p-6 sm:p-8 space-y-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="text-base font-bold text-[#171717]">MCP Interactive Protocol Inspection</h3>
-                      <p className="text-xs text-[#737373] mt-0.5">Live execution payload trace between client agent and {skill.name}.</p>
-                    </div>
-                    <span className="font-mono text-[11px] text-[#A3A3A3] bg-[#F8F8F7] px-2.5 py-1 rounded border border-[#E8E8E6]">
-                      TOOLS/CALL RPC 2.0
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Input Terminal */}
-                    <div className="bg-[#171717] rounded-lg border border-[#333333] text-white overflow-hidden flex flex-col font-mono text-[12px]">
-                      <div className="px-4 py-2 bg-[#222222] border-b border-[#333333] flex items-center justify-between text-[#A3A3A3]">
-                        <span className="flex items-center gap-1.5">
-                          <span className="w-2.5 h-2.5 rounded-full bg-[#737373]"></span>
-                          <span>Client Request</span>
-                        </span>
-                        <span className="text-[10px]">tools/call</span>
-                      </div>
-                      <pre className="p-4 overflow-x-auto text-[#CCCCCC] leading-5 text-[11px]">
-{`{
-  "method": "tools/call",
-  "params": {
-    "name": "refactor_symbols",
-    "arguments": {
-      "targetFile": "src/auth/session.ts",
-      "action": "migrate_iron_session_v8",
-      "updateCallers": true
-    }
-  }
-}`}
-                      </pre>
-                    </div>
-
-                    {/* Output Terminal */}
-                    <div className="bg-[#171717] rounded-lg border border-[#333333] text-white overflow-hidden flex flex-col font-mono text-[12px]">
-                      <div className="px-4 py-2 bg-[#222222] border-b border-[#333333] flex items-center justify-between text-[#A3A3A3]">
-                        <span className="flex items-center gap-1.5">
-                          <span className="w-2.5 h-2.5 rounded-full bg-[#15803D]"></span>
-                          <span>Synthesized Patch</span>
-                        </span>
-                        <span className="text-[10px] text-[#15803D]">200 OK (294ms)</span>
-                      </div>
-                      <pre className="p-4 overflow-x-auto text-[#CCCCCC] leading-5 text-[11px]">
-{`--- a/src/auth/session.ts
-+++ b/src/auth/session.ts
-@@ -14,5 +14,6 @@
-- import { withIronSession } from 'iron-session';
-+ import { getIronSession } from 'iron-session';
-+ import { sessionOptions } from './config';
-
-✨ 3 callers automatically updated.`}
-                      </pre>
                     </div>
                   </div>
                 </div>
@@ -534,7 +581,7 @@ export function SkillDetailPage({ slug }: { slug: string }) {
                   <div className="flex items-center justify-between">
                     <div>
                       <h3 className="text-base font-bold text-[#171717]">8-Point Automated Security Scan</h3>
-                      <p className="text-xs text-[#737373]">Static AST analysis and behavioral verification log.</p>
+                      <p className="text-xs text-[#737373]">Static AST analysis, frontmatter check, and behavioral verification log.</p>
                     </div>
                     <span className="px-2.5 py-1 rounded bg-emerald-50 text-[#15803D] font-mono text-xs font-semibold border border-emerald-200">
                       8 / 8 RULES PASSED
@@ -563,7 +610,6 @@ export function SkillDetailPage({ slug }: { slug: string }) {
                 <div className="p-6 sm:p-8 space-y-6">
                   <h3 className="text-base font-bold text-[#171717]">Community Reviews & Discussion</h3>
 
-                  {/* Review form if logged in */}
                   {user ? (
                     <form onSubmit={handleReviewSubmit} className="p-4 bg-[#F8F8F7] border border-[#E8E8E6] rounded-lg space-y-3">
                       <div className="flex items-center justify-between">
@@ -626,17 +672,17 @@ export function SkillDetailPage({ slug }: { slug: string }) {
             </div>
           </div>
 
-          {/* RIGHT 4 COLUMNS: Sticky Action Panel & Creator Profile */}
+          {/* RIGHT 4 COLUMNS: Sticky Action Panel & Downloads */}
           <div className="lg:col-span-4 flex flex-col gap-6 lg:sticky lg:top-20">
             {/* Action Card */}
             <div className="bg-white border border-[#E8E8E6] rounded-xl p-6 shadow-xs space-y-5">
               <div className="flex items-baseline justify-between">
-                <span className="text-xs text-[#737373]">Execution Cost</span>
+                <span className="text-xs text-[#737373]">Skill License</span>
                 <div className="flex items-baseline gap-1 font-mono">
                   <span className="text-2xl font-bold text-[#171717]">
                     {isFree ? 'Free' : `$${effectivePrice.toFixed(2)}`}
                   </span>
-                  <span className="text-xs text-[#737373]">/ license</span>
+                  <span className="text-xs text-[#737373]">{isFree ? '(Open Source)' : '/ lifetime access'}</span>
                 </div>
               </div>
 
@@ -649,43 +695,140 @@ export function SkillDetailPage({ slug }: { slug: string }) {
               )}
 
               {/* Primary Action Button */}
-              <button
-                onClick={handleAcquire}
-                disabled={actionLoading}
-                className="w-full h-11 bg-[#F97316] hover:bg-[#EA580C] text-white font-medium text-xs rounded-lg flex items-center justify-center gap-2 transition-all active:scale-[0.99] disabled:opacity-50"
-              >
-                <Terminal className="w-4 h-4" />
-                <span>
-                  {actionLoading
-                    ? 'Processing...'
-                    : is_purchased || isFree
-                    ? 'Connect via MCP (Active)'
-                    : `Get Skill for $${effectivePrice.toFixed(2)}`}
-                </span>
-              </button>
+              {!isUnlocked ? (
+                <button
+                  onClick={handleAcquire}
+                  disabled={actionLoading}
+                  className="w-full h-11 bg-[#F97316] hover:bg-[#EA580C] text-white font-medium text-xs rounded-lg flex items-center justify-center gap-2 transition-all active:scale-[0.99] disabled:opacity-50"
+                >
+                  <Lock className="w-4 h-4" />
+                  <span>
+                    {actionLoading
+                      ? 'Processing...'
+                      : `Purchase & Unlock ($${effectivePrice.toFixed(2)})`}
+                  </span>
+                </button>
+              ) : (
+                <div className="p-3 bg-emerald-50/70 border border-emerald-200 rounded-lg flex items-center gap-2 text-xs text-[#15803D] font-medium">
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+                  <span>{isCreator ? 'You are the creator of this skill' : 'Authorized for download'}</span>
+                </div>
+              )}
 
-              {/* One-Click Terminal Snippet */}
+              {/* Target Agent Selector */}
+              <div className="space-y-1.5 pt-2 border-t border-[#E8E8E6]">
+                <label className="text-xs font-semibold text-[#171717] flex items-center justify-between">
+                  <span>Selected Coding Agent</span>
+                  <span className="text-[10px] font-mono text-[#737373]">{currentAgentInfo.label}</span>
+                </label>
+                <select
+                  value={selectedAgent}
+                  onChange={(e) => setSelectedAgent(e.target.value as TargetAgent)}
+                  className="w-full px-3 py-2 bg-[#F8F8F7] border border-[#E8E8E6] rounded-lg text-xs text-[#171717] focus:outline-none focus:border-[#F97316]"
+                >
+                  {AGENT_OPTIONS.map((opt) => (
+                    <option key={opt.id} value={opt.id}>
+                      {opt.icon} {opt.label} ({opt.path})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Target Install Directory */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between text-[11px] text-[#737373] font-mono">
-                  <span>CLI Connect</span>
-                  <button onClick={handleCopyCli} className="hover:text-[#171717] flex items-center gap-1">
-                    {copiedCli ? <Check className="w-3 h-3 text-[#15803D]" /> : <Copy className="w-3 h-3" />}
-                    <span>{copiedCli ? 'Copied' : 'Copy'}</span>
+                  <span>Installation Path</span>
+                  <button onClick={handleCopyPath} className="hover:text-[#171717] flex items-center gap-1">
+                    {copiedPath ? <Check className="w-3 h-3 text-[#15803D]" /> : <Copy className="w-3 h-3" />}
+                    <span>{copiedPath ? 'Copied' : 'Copy'}</span>
                   </button>
                 </div>
                 <div className="p-2.5 bg-[#F8F8F7] border border-[#E8E8E6] rounded-lg font-mono text-xs text-[#171717] flex items-center justify-between">
-                  <code className="truncate">kyron connect {skill.slug}</code>
+                  <code className="truncate">{targetInstallPath}</code>
                 </div>
               </div>
 
-              {/* Copy MCP JSON */}
-              <button
-                onClick={handleCopyMcp}
-                className="w-full py-2 bg-white hover:bg-[#F8F8F7] border border-[#E8E8E6] rounded-lg text-xs font-mono font-medium text-[#171717] flex items-center justify-center gap-1.5 transition-colors"
-              >
-                {copiedMcp ? <Check className="w-3.5 h-3.5 text-[#15803D]" /> : <Copy className="w-3.5 h-3.5" />}
-                <span>{copiedMcp ? 'JSON Copied!' : 'Copy MCP Config JSON'}</span>
-              </button>
+              {/* Action Buttons Cluster: Copy Prompt, Download Prompt, Download SKILL.md, Download ZIP */}
+              <div className="space-y-2 pt-2 border-t border-[#E8E8E6]">
+                <button
+                  onClick={handleCopyPrompt}
+                  disabled={!isUnlocked}
+                  className="w-full py-2.5 bg-[#171717] hover:bg-black text-white text-xs font-medium rounded-lg flex items-center justify-center gap-2 transition-colors disabled:opacity-40"
+                >
+                  {copiedPrompt ? <Check className="w-3.5 h-3.5 text-[#15803D]" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{copiedPrompt ? 'Prompt Copied to Clipboard!' : 'Copy AI Installation Prompt'}</span>
+                </button>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <a
+                    href={isUnlocked ? api.getMarkdownDownloadUrl(skill.slug) : '#'}
+                    download={isUnlocked}
+                    onClick={(e) => {
+                      if (!isUnlocked) {
+                        e.preventDefault();
+                        handleAcquire();
+                      }
+                    }}
+                    className={`py-2 px-2.5 border rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-colors ${
+                      isUnlocked
+                        ? 'bg-white hover:bg-[#F8F8F7] border-[#E8E8E6] text-[#171717]'
+                        : 'bg-[#F8F8F7] border-[#E8E8E6] text-[#A3A3A3] cursor-not-allowed'
+                    }`}
+                  >
+                    <FileText className="w-3.5 h-3.5 text-[#F97316]" />
+                    <span>Download .md</span>
+                  </a>
+
+                  <a
+                    href={isUnlocked ? api.getZipDownloadUrl(skill.slug) : '#'}
+                    download={isUnlocked}
+                    onClick={(e) => {
+                      if (!isUnlocked) {
+                        e.preventDefault();
+                        handleAcquire();
+                      }
+                    }}
+                    className={`py-2 px-2.5 border rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-colors ${
+                      isUnlocked
+                        ? 'bg-white hover:bg-[#F8F8F7] border-[#E8E8E6] text-[#171717]'
+                        : 'bg-[#F8F8F7] border-[#E8E8E6] text-[#A3A3A3] cursor-not-allowed'
+                    }`}
+                  >
+                    <FolderArchive className="w-3.5 h-3.5 text-[#F97316]" />
+                    <span>Download ZIP</span>
+                  </a>
+                </div>
+
+                <a
+                  href={isUnlocked ? api.getPromptDownloadUrl(skill.slug, selectedAgent) : '#'}
+                  download={isUnlocked}
+                  onClick={(e) => {
+                    if (!isUnlocked) {
+                      e.preventDefault();
+                      handleAcquire();
+                    }
+                  }}
+                  className={`w-full py-2 border rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-colors ${
+                    isUnlocked
+                      ? 'bg-[#F8F8F7] hover:bg-[#EDEDEB] border-[#E8E8E6] text-[#525252]'
+                      : 'bg-[#F8F8F7] border-[#E8E8E6] text-[#A3A3A3] cursor-not-allowed'
+                  }`}
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Download Prompt File</span>
+                </a>
+              </div>
+
+              {/* Informative Note regarding Standalone Markdown vs ZIP */}
+              <div className="p-3 bg-[#FFF4EB]/60 border border-[#F97316]/20 rounded-lg text-[11px] text-[#737373] space-y-1">
+                <div className="flex items-center gap-1.5 font-semibold text-[#171717]">
+                  <Info className="w-3.5 h-3.5 text-[#F97316]" />
+                  <span>Package Delivery Note</span>
+                </div>
+                <p>
+                  The standalone Markdown file includes YAML frontmatter and instructions. If this skill utilizes supporting resources (scripts, templates), download the complete ZIP package for full functionality.
+                </p>
+              </div>
 
               {/* Secondary Actions: Save and Upvote */}
               <div className="grid grid-cols-2 gap-2 pt-2 border-t border-[#E8E8E6]">

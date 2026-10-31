@@ -7,10 +7,10 @@ import { HomePage } from './pages/HomePage.tsx';
 import { SkillsPage } from './pages/SkillsPage.tsx';
 import { CategoriesPage } from './pages/CategoriesPage.tsx';
 import { SkillDetailPage } from './pages/SkillDetailPage.tsx';
-import { McpHubPage } from './pages/McpHubPage.tsx';
 import { DashboardPage } from './pages/DashboardPage.tsx';
 import { LibraryPage } from './pages/LibraryPage.tsx';
 import { CreatorStudioPage } from './pages/CreatorStudioPage.tsx';
+import { CreatorHubPage } from './pages/CreatorHubPage.tsx';
 import { SubmitSkillPage } from './pages/SubmitSkillPage.tsx';
 import { CreatorProfilePage } from './pages/CreatorProfilePage.tsx';
 import { ChatPage } from './pages/ChatPage.tsx';
@@ -20,6 +20,20 @@ import { TeamSettingsPage } from './pages/TeamSettingsPage.tsx';
 import { AdminSecurityPage } from './pages/AdminSecurityPage.tsx';
 import { AuthPage } from './pages/AuthPage.tsx';
 import { ErrorBoundary } from './components/ErrorBoundary.tsx';
+import { ProtectedRoute, AuthLoadingScreen } from './components/ProtectedRoute.tsx';
+import { useAuth } from './context/AuthContext.tsx';
+
+const AUTH_ROUTES = ['/auth', '/login', '/signup', '/forgot-password', '/reset-password', '/auth/callback'];
+
+// "My Profile" resolves to the signed-in user's public creator page.
+function MyProfileRedirect() {
+  const { user } = useAuth();
+  const { navigate } = useRouter();
+  React.useEffect(() => {
+    if (user?.username) navigate(`/creators/${user.username}`, { replace: true });
+  }, [user?.username]); // eslint-disable-line react-hooks/exhaustive-deps
+  return <AuthLoadingScreen label="Opening your profile…" />;
+}
 
 export function App() {
   const { path } = useRouter();
@@ -32,37 +46,58 @@ export function App() {
   let PageComponent = <HomePage />;
   const isChatPage = path === '/chat';
 
-  if (skillDetailMatch) {
+  if (path === '/creators') {
+    PageComponent = <CreatorHubPage />;
+  } else if (creatorProfileMatch) {
+    const username = creatorProfileMatch[1];
+    PageComponent = <CreatorProfilePage username={username} />;
+  } else if (skillDetailMatch) {
     const slug = skillDetailMatch[1];
     PageComponent = <SkillDetailPage slug={slug} />;
   } else if (projectDetailMatch) {
     PageComponent = <ProjectDetailPage />;
-  } else if (creatorProfileMatch) {
-    PageComponent = <CreatorProfilePage />;
-  } else if (path === '/skills') {
+  } else if (path === '/skills' || path === '/marketplace') {
     PageComponent = <SkillsPage />;
   } else if (path === '/categories') {
     PageComponent = <CategoriesPage />;
-  } else if (path === '/mcp' || path.startsWith('/docs')) {
-    PageComponent = <McpHubPage />;
   } else if (path === '/dashboard' || path === '/workspace') {
-    PageComponent = <DashboardPage />;
+    PageComponent = (
+      <ProtectedRoute>
+        <DashboardPage />
+      </ProtectedRoute>
+    );
   } else if (path === '/library') {
-    PageComponent = <LibraryPage />;
-  } else if (path === '/creator' || path === '/sell') {
-    PageComponent = <CreatorStudioPage />;
-  } else if (path === '/creator/submit') {
-    PageComponent = <SubmitSkillPage />;
+    PageComponent = (
+      <ProtectedRoute>
+        <LibraryPage />
+      </ProtectedRoute>
+    );
+  } else if (path === '/creator-studio' || path === '/creator' || path === '/sell' || path === '/creator/submit') {
+    PageComponent = (
+      <ProtectedRoute>
+        <CreatorStudioPage />
+      </ProtectedRoute>
+    );
   } else if (path === '/chat') {
     PageComponent = <ChatPage />;
   } else if (path === '/projects') {
     PageComponent = <ProjectsPage />;
   } else if (path === '/settings' || path === '/team') {
-    PageComponent = <TeamSettingsPage />;
+    PageComponent = (
+      <ProtectedRoute>
+        <TeamSettingsPage />
+      </ProtectedRoute>
+    );
   } else if (path === '/admin' || path === '/security') {
     PageComponent = <AdminSecurityPage />;
-  } else if (path === '/auth') {
+  } else if (AUTH_ROUTES.includes(path)) {
     PageComponent = <AuthPage />;
+  } else if (path === '/profile') {
+    PageComponent = (
+      <ProtectedRoute>
+        <MyProfileRedirect />
+      </ProtectedRoute>
+    );
   }
 
   return (

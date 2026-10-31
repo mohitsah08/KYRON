@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Skill } from '../types.ts';
 import { useRouter, Link } from '../context/RouterContext.tsx';
 import { useAuth } from '../context/AuthContext.tsx';
+import { loginPathFor } from '../utils/authHelpers.ts';
 import { api } from '../utils/api.ts';
 import { Check, Download, ArrowRight, Star, ShieldCheck, Terminal } from 'lucide-react';
 
@@ -26,7 +27,7 @@ export function SkillCard({ skill, onInstalled }: SkillCardProps) {
     e.stopPropagation();
 
     if (!user) {
-      navigate('/auth');
+      navigate(loginPathFor(window.location.pathname + window.location.search));
       return;
     }
 
@@ -107,7 +108,7 @@ export function SkillCard({ skill, onInstalled }: SkillCardProps) {
             v{skill.current_version}
           </span>
           <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-[#FFF4EB] border border-[#F97316]/20 text-[#F97316]">
-            MCP 1.0
+            Agent Skill
           </span>
           {skill.category && (
             <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-[#F8F8F7] text-[#737373]">
@@ -158,8 +159,8 @@ export function SkillCard({ skill, onInstalled }: SkillCardProps) {
                 </>
               ) : (
                 <>
-                  <Terminal className="w-3 h-3" />
-                  <span>{installing ? 'Purchasing...' : 'Connect'}</span>
+                  <Download className="w-3 h-3" />
+                  <span>{installing ? 'Purchasing...' : 'Buy Skill'}</span>
                 </>
               )}
             </button>

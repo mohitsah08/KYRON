@@ -1,11 +1,15 @@
 process.env.NODE_ENV = 'test';
 process.env.TEST_MODE = 'true';
 
-import { describe, it } from 'node:test';
+import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert';
 import http from 'node:http';
+import { app } from '../server/index.ts';
+import { initDatabase } from '../server/db/database.ts';
+import { runSeed } from '../server/db/seed.ts';
 
-const BASE_URL = 'http://localhost:3000';
+let BASE_URL = 'http://localhost:3000';
+let server: http.Server;
 
 function apiFetch(endpoint: string, options: any = {}): Promise<{ status: number; body: any }> {
   return new Promise((resolve, reject) => {
@@ -52,6 +56,22 @@ describe('KYRON End-to-End User Journeys & Specification Verification', () => {
   let demoToken: string;
   let adminToken: string;
   let testBuyerToken: string;
+
+  before(async () => {
+    await initDatabase();
+    runSeed();
+    await new Promise<void>((resolve) => {
+      server = app.listen(0, () => {
+        const address = server.address() as any;
+        BASE_URL = `http://localhost:${address.port}`;
+        resolve();
+      });
+    });
+  });
+
+  after(() => {
+    server?.close();
+  });
 
   it('Journey 1: Discover skills, search, and category counts', async () => {
     // 1. Fetch categories

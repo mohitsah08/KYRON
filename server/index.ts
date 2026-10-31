@@ -1,3 +1,13 @@
+import dotenv from 'dotenv';
+import fs from 'node:fs';
+
+if (process.env.NODE_ENV !== 'test' && !process.env.TEST_MODE) {
+  if (fs.existsSync('.env.local')) {
+    dotenv.config({ path: '.env.local' });
+  }
+  dotenv.config();
+}
+
 import { app } from './app.ts';
 import { initDatabase } from './db/database.ts';
 
@@ -9,8 +19,7 @@ let serverInstance: any = null;
 initDatabase().then(() => {
   if (process.env.NODE_ENV !== 'test' && !process.env.TEST_MODE && !process.env.VERCEL) {
     serverInstance = app.listen(PORT, () => {
-      console.log(`KYRON Server listening on http://localhost:${PORT}`);
-      console.log(`MCP Endpoint active on http://localhost:${PORT}/api/mcp and /mcp`);
+      console.log(`KYRON AI Skills Marketplace listening on http://localhost:${PORT}`);
     });
   }
 }).catch(err => {

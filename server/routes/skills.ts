@@ -1,6 +1,8 @@
 import { Router, Response } from 'express';
 import { db } from '../db/database.ts';
 import { optionalAuth, AuthRequest, requireAuth } from '../middleware/auth.ts';
+import { buildSkillZip, generateInstallationPrompt, TargetAgent, getAgentInstallPath } from '../services/skillPackageService.ts';
+import crypto from 'node:crypto';
 
 const router = Router();
 
@@ -48,7 +50,7 @@ router.get('/categories', async (_req, res: Response) => {
     const counts = await db.all(`
       SELECT category, COUNT(*) as count 
       FROM skills 
-      WHERE status = 'live' 
+      WHERE status IN ('live', 'published') 
       GROUP BY category
     `) as { category: string; count: number }[];
     const countMap = new Map(counts.map(c => [c.category, Number(c.count)]));
@@ -58,7 +60,7 @@ router.get('/categories', async (_req, res: Response) => {
       count: countMap.get(cat.slug) || 0
     }));
 
-    const totalRow = await db.get(`SELECT COUNT(*) as count FROM skills WHERE status = 'live'`) as any;
+    const totalRow = await db.get(`SELECT COUNT(*) as count FROM skills WHERE status IN ('live', 'published')`) as any;
     const total = totalRow ? Number(totalRow.count) : 0;
 
     res.json({ categories: result, total });
@@ -126,7 +128,7 @@ router.get('/deals', async (_req, res: Response) => {
 // 3. Search and browse skills
 router.get('/', optionalAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const { category, pricing_type, q, sort = 'trending', limit = 50, offset = 0 } = req.query;
+    const { category, pricing_type, creator, q, sort = 'trending', limit = 50, offset = 0 } = req.query;
 
     let querySql = `
       SELECT s.id, s.name, s.slug, s.summary, s.category, s.tags, s.logo_url,
@@ -138,10 +140,15 @@ router.get('/', optionalAuth, async (req: AuthRequest, res: Response) => {
       FROM skills s
       JOIN profiles p ON s.creator_id = p.id
       LEFT JOIN skill_deals d ON d.skill_id = s.id AND d.is_active = 1 AND datetime(d.expires_at) > datetime('now')
-      WHERE s.status = 'live'
+      WHERE s.status IN ('live', 'published')
     `;
 
     const params: any[] = [];
+
+    if (creator && typeof creator === 'string' && creator.trim()) {
+      querySql += ` AND (p.username = ? OR p.id = ?)`;
+      params.push(creator.trim(), creator.trim());
+    }
 
     if (category && typeof category === 'string' && category !== 'all') {
       querySql += ` AND s.category = ?`;
@@ -243,6 +250,23 @@ router.get('/:slug', optionalAuth, async (req: AuthRequest, res: Response) => {
       return;
     }
 
+    // Draft privacy: drafts are only visible to their creator or admin
+    if (skill.status !== 'live' && skill.status !== 'published') {
+      let canViewDraft = false;
+      if (req.user) {
+        if (req.user.id === skill.creator_id) {
+          canViewDraft = true;
+        } else {
+          const profile = await db.get(`SELECT is_unlimited_credit_user FROM profiles WHERE id = ?`, [req.user.id]) as any;
+          if (profile && profile.is_unlimited_credit_user === 1) canViewDraft = true;
+        }
+      }
+      if (!canViewDraft) {
+        res.status(404).json({ error: 'Skill not found' });
+        return;
+      }
+    }
+
     // Increment view count
     await db.run(`UPDATE skills SET view_count = view_count + 1 WHERE id = ?`, [skill.id]);
 
@@ -262,7 +286,7 @@ router.get('/:slug', optionalAuth, async (req: AuthRequest, res: Response) => {
       const purchase = await db.get(`
         SELECT id FROM user_purchases WHERE user_id = ? AND skill_id = ? AND status = 'completed'
       `, [req.user.id, skill.id]);
-      if (purchase) isOwned = true;
+      if (purchase || req.user.id === skill.creator_id) isOwned = true;
     }
 
     let parsedTags: string[] = [];
@@ -320,37 +344,70 @@ router.get('/:slug', optionalAuth, async (req: AuthRequest, res: Response) => {
   }
 });
 
+// Helper to check user entitlement for downloading/viewing a skill's package
+async function checkSkillEntitlement(skill: any, user?: { id: string }) {
+  // Draft privacy: drafts and unapproved skills are only accessible to their creator or admin
+  if (skill.status && skill.status !== 'live' && skill.status !== 'published') {
+    if (!user) {
+      return { authorized: false, status: 404, error: 'Skill not found' };
+    }
+    if (skill.creator_id === user.id) {
+      return { authorized: true };
+    }
+    const profile = await db.get(`SELECT is_unlimited_credit_user FROM profiles WHERE id = ?`, [user.id]) as any;
+    if (profile && profile.is_unlimited_credit_user === 1) {
+      return { authorized: true, isAdmin: true };
+    }
+    return { authorized: false, status: 404, error: 'Skill not found' };
+  }
+
+  const isFree = skill.pricing_type === 'free' || Number(skill.price) === 0;
+  if (isFree) return { authorized: true };
+
+  if (!user) {
+    return { authorized: false, status: 401, error: 'Authentication required to access paid skill content.' };
+  }
+
+  if (skill.creator_id === user.id) {
+    return { authorized: true };
+  }
+
+  const purchase = await db.get(`
+    SELECT id, license_key FROM user_purchases 
+    WHERE user_id = ? AND skill_id = ? AND status = 'completed'
+  `, [user.id, skill.id]) as any;
+
+  if (purchase) return { authorized: true, purchase };
+
+  const profile = await db.get(`SELECT is_unlimited_credit_user FROM profiles WHERE id = ?`, [user.id]) as any;
+  if (profile && profile.is_unlimited_credit_user === 1) {
+    return { authorized: true, isAdmin: true };
+  }
+
+  return {
+    authorized: false,
+    status: 403,
+    error: 'Access denied: Purchase required. You do not have an active entitlement or license for this paid skill. Please acquire or top up credits first.'
+  };
+}
+
 // 5. Entitlement check: Secure Skill Storage and Delivery
 router.get('/:slug/package', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const { slug } = req.params;
     const userId = req.user!.id;
 
-    const skill = await db.get(`SELECT id, name, price, pricing_type FROM skills WHERE slug = ? OR id = ?`, [slug, slug]) as any;
+    const skill = await db.get(`SELECT id, name, price, pricing_type, creator_id, status FROM skills WHERE slug = ? OR id = ?`, [slug, slug]) as any;
 
     if (!skill) {
       res.status(404).json({ error: 'Skill not found' });
       return;
     }
 
-    // Check entitlement if paid
-    const isFree = skill.pricing_type === 'free' || Number(skill.price) === 0;
-    if (!isFree) {
-      const purchase = await db.get(`
-        SELECT id, license_key FROM user_purchases 
-        WHERE user_id = ? AND skill_id = ? AND status = 'completed'
-      `, [userId, skill.id]) as any;
-
-      // Check if user is admin
-      const profile = await db.get(`SELECT is_unlimited_credit_user FROM profiles WHERE id = ?`, [userId]) as any;
-      const isAdmin = profile && profile.is_unlimited_credit_user === 1;
-
-      if (!purchase && !isAdmin) {
-        res.status(403).json({
-          error: 'Access denied: You do not have an active entitlement or license for this paid skill. Please acquire or top up credits first.'
-        });
-        return;
-      }
+    const authCheck = await checkSkillEntitlement(skill, req.user);
+    if (!authCheck.authorized) {
+      res.status(authCheck.status || 403).json({ error: authCheck.error });
+      return;
     }
 
     // Fetch package contents
@@ -364,6 +421,8 @@ router.get('/:slug/package', requireAuth, async (req: AuthRequest, res: Response
     let files: any = {};
     try { files = JSON.parse(pkg.files_json); } catch {}
 
+    const fileKeys = Object.keys(files).filter(k => k !== 'SKILL.md');
+
     res.json({
       skill_id: skill.id,
       skill_name: skill.name,
@@ -371,11 +430,181 @@ router.get('/:slug/package', requireAuth, async (req: AuthRequest, res: Response
       skill_md: pkg.skill_md_content,
       skill_md_content: pkg.skill_md_content,
       files,
+      has_supporting_files: fileKeys.length > 0,
+      file_names: Object.keys(files),
       delivered_at: new Date().toISOString()
     });
   } catch (err: any) {
     console.error('Package delivery error:', err.message);
     res.status(500).json({ error: 'Failed to retrieve skill package.' });
+  }
+});
+
+// 6. Download Standalone Markdown (.md)
+router.get('/:slug/download/markdown', optionalAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const { slug } = req.params;
+    const skill = await db.get(`SELECT id, name, slug, price, pricing_type, creator_id, status FROM skills WHERE slug = ? OR id = ?`, [slug, slug]) as any;
+
+    if (!skill) {
+      res.status(404).json({ error: 'Skill not found' });
+      return;
+    }
+
+    const authCheck = await checkSkillEntitlement(skill, req.user);
+    if (!authCheck.authorized) {
+      res.status(authCheck.status || 403).json({ error: authCheck.error });
+      return;
+    }
+
+    const pkg = await db.get(`SELECT version, skill_md_content, files_json FROM skill_packages WHERE skill_id = ?`, [skill.id]) as any;
+    if (!pkg) {
+      res.status(404).json({ error: 'Skill package contents unavailable.' });
+      return;
+    }
+
+    // Log download record
+    const downloadId = 'dl_' + crypto.randomUUID();
+    const userId = req.user ? req.user.id : null;
+    const now = new Date().toISOString();
+    try {
+      await db.run(
+        `INSERT INTO skill_downloads (id, skill_id, user_id, version, download_type, downloaded_at) VALUES (?, ?, ?, ?, 'markdown', ?)`,
+        [downloadId, skill.id, userId, pkg.version, now]
+      );
+    } catch {}
+
+    const safeSlug = skill.slug.replace(/[^a-z0-9_-]/gi, '-');
+    res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${safeSlug}.md"`);
+    res.send(pkg.skill_md_content);
+  } catch (err: any) {
+    console.error('Download markdown error:', err.message);
+    res.status(500).json({ error: 'Failed to download skill markdown.' });
+  }
+});
+
+// 7. Download Complete ZIP Package
+router.get('/:slug/download/zip', optionalAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const { slug } = req.params;
+    const skill = await db.get(`SELECT id, name, slug, price, pricing_type, creator_id, status FROM skills WHERE slug = ? OR id = ?`, [slug, slug]) as any;
+
+    if (!skill) {
+      res.status(404).json({ error: 'Skill not found' });
+      return;
+    }
+
+    const authCheck = await checkSkillEntitlement(skill, req.user);
+    if (!authCheck.authorized) {
+      res.status(authCheck.status || 403).json({ error: authCheck.error });
+      return;
+    }
+
+    const pkg = await db.get(`SELECT version, skill_md_content, files_json FROM skill_packages WHERE skill_id = ?`, [skill.id]) as any;
+    if (!pkg) {
+      res.status(404).json({ error: 'Skill package contents unavailable.' });
+      return;
+    }
+
+    let filesMap: Record<string, string> = {};
+    try { filesMap = JSON.parse(pkg.files_json); } catch {}
+
+    const zipBuffer = await buildSkillZip(skill.slug, pkg.skill_md_content, filesMap);
+
+    // Log download record
+    const downloadId = 'dl_' + crypto.randomUUID();
+    const userId = req.user ? req.user.id : null;
+    const now = new Date().toISOString();
+    try {
+      await db.run(
+        `INSERT INTO skill_downloads (id, skill_id, user_id, version, download_type, downloaded_at) VALUES (?, ?, ?, ?, 'zip', ?)`,
+        [downloadId, skill.id, userId, pkg.version, now]
+      );
+    } catch {}
+
+    const safeSlug = skill.slug.replace(/[^a-z0-9_-]/gi, '-');
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${safeSlug}.zip"`);
+    res.setHeader('Content-Length', zipBuffer.length);
+    res.send(zipBuffer);
+  } catch (err: any) {
+    console.error('Download zip error:', err.message);
+    res.status(500).json({ error: 'Failed to download skill ZIP package.' });
+  }
+});
+
+// 8. Generate & Deliver AI Agent Installation Prompt
+router.get('/:slug/prompt', optionalAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const { slug } = req.params;
+    const agent = (req.query.agent as TargetAgent) || 'generic';
+    const isDownload = req.query.download === '1' || req.query.download === 'file' || req.query.format === 'file';
+
+    const skill = await db.get(`SELECT id, name, slug, summary, price, pricing_type, creator_id, current_version, status FROM skills WHERE slug = ? OR id = ?`, [slug, slug]) as any;
+
+    if (!skill) {
+      res.status(404).json({ error: 'Skill not found' });
+      return;
+    }
+
+    const authCheck = await checkSkillEntitlement(skill, req.user);
+    if (!authCheck.authorized) {
+      res.status(authCheck.status || 403).json({ error: authCheck.error });
+      return;
+    }
+
+    const pkg = await db.get(`SELECT version, files_json FROM skill_packages WHERE skill_id = ?`, [skill.id]) as any;
+    let filesMap: Record<string, string> = {};
+    if (pkg) {
+      try { filesMap = JSON.parse(pkg.files_json); } catch {}
+    }
+
+    const fileList = Object.keys(filesMap);
+    const hasSupportingFiles = fileList.filter(f => f !== 'SKILL.md').length > 0;
+
+    const promptText = generateInstallationPrompt({
+      skillName: skill.name,
+      skillSlug: skill.slug,
+      version: pkg?.version || skill.current_version || '1.0.0',
+      summary: skill.summary || '',
+      targetAgent: agent,
+      hasSupportingFiles,
+      fileList
+    });
+
+    // Log download record
+    const downloadId = 'dl_' + crypto.randomUUID();
+    const userId = req.user ? req.user.id : null;
+    const now = new Date().toISOString();
+    try {
+      await db.run(
+        `INSERT INTO skill_downloads (id, skill_id, user_id, version, download_type, downloaded_at) VALUES (?, ?, ?, ?, 'prompt', ?)`,
+        [downloadId, skill.id, userId, pkg?.version || '1.0.0', now]
+      );
+    } catch {}
+
+    const safeSlug = skill.slug.replace(/[^a-z0-9_-]/gi, '-');
+
+    if (isDownload) {
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="${safeSlug}-${agent}-install-prompt.txt"`);
+      res.send(promptText);
+    } else {
+      res.json({
+        skill_id: skill.id,
+        skill_name: skill.name,
+        slug: skill.slug,
+        agent,
+        prompt: promptText,
+        install_path: getAgentInstallPath(agent, skill.slug).path,
+        has_supporting_files: hasSupportingFiles,
+        file_count: fileList.length
+      });
+    }
+  } catch (err: any) {
+    console.error('Prompt generator error:', err.message);
+    res.status(500).json({ error: 'Failed to generate installation prompt.' });
   }
 });
 

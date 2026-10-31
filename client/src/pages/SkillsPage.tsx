@@ -132,12 +132,11 @@ export function SkillsPage() {
   const totalPages = Math.ceil(totalSkills / limit) || 1;
 
   const platforms = [
-    { id: 'all', label: 'All Protocols' },
-    { id: 'mcp', label: 'MCP Protocol' },
-    { id: 'claude', label: 'Claude Desktop' },
-    { id: 'cursor', label: 'Cursor Rules' },
-    { id: 'gpt4', label: 'OpenAI GPT-4o' },
-    { id: 'langchain', label: 'LangChain' },
+    { id: 'all', label: 'All Agents' },
+    { id: 'claude', label: 'Claude Code' },
+    { id: 'cursor', label: 'Cursor' },
+    { id: 'codex', label: 'OpenAI Codex' },
+    { id: 'antigravity', label: 'Antigravity' },
   ];
 
   return (
@@ -156,7 +155,7 @@ export function SkillsPage() {
                 Explore the Marketplace
               </h1>
               <p className="text-xs sm:text-sm text-[#737373] mt-1 max-w-xl">
-                Browse verified agent tools, MCP endpoints, and runtime integrations categorized by discipline and protocol.
+                Browse verified agent skills, prompts, and packages for Claude Code, Cursor, Codex, and Antigravity.
               </p>
             </div>
 
@@ -269,7 +268,7 @@ export function SkillsPage() {
               </h4>
               <div className="flex items-center gap-2 p-2 bg-[#F8F8F7] border border-[#E8E8E6] rounded-lg text-xs text-[#171717]">
                 <ShieldCheck className="w-4 h-4 text-[#15803D] shrink-0" />
-                <span>Passed 8-Point AST Scan</span>
+                <span>Passed 8-Point Security Scan</span>
               </div>
             </div>
 
@@ -367,16 +366,31 @@ export function SkillsPage() {
                 <div className="w-10 h-10 rounded-full bg-white border border-[#E8E8E6] mx-auto flex items-center justify-center text-[#737373]">
                   <Search className="w-5 h-5" />
                 </div>
-                <h3 className="text-base font-bold text-[#171717]">No matching skills found</h3>
+                <h3 className="text-base font-bold text-[#171717]">
+                  {totalSkills === 0 && !searchQuery && !selectedCategory && selectedFilter === 'all'
+                    ? 'No skills published to the marketplace yet'
+                    : 'No matching skills found'}
+                </h3>
                 <p className="text-xs text-[#737373] max-w-sm mx-auto">
-                  Try adjusting your keywords, resetting category filters, or exploring all pricing options.
+                  {totalSkills === 0 && !searchQuery && !selectedCategory && selectedFilter === 'all'
+                    ? 'KYRON is clean and ready for creators. Be the first to author and publish a verified AI skill.'
+                    : 'Try adjusting your keywords, resetting category filters, or exploring all pricing options.'}
                 </p>
-                <button
-                  onClick={clearFilters}
-                  className="px-4 py-2 bg-white border border-[#E8E8E6] hover:bg-[#F8F8F7] text-[#171717] text-xs font-medium rounded-lg transition-colors"
-                >
-                  Reset all filters
-                </button>
+                {totalSkills === 0 && !searchQuery && !selectedCategory && selectedFilter === 'all' ? (
+                  <button
+                    onClick={() => navigate('/creator-studio')}
+                    className="px-4 py-2 bg-[#F97316] hover:bg-[#EA580C] text-white text-xs font-semibold rounded-lg transition-colors inline-flex items-center gap-1.5 shadow-xs"
+                  >
+                    <span>Create Your First Skill</span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={clearFilters}
+                    className="px-4 py-2 bg-white border border-[#E8E8E6] hover:bg-[#F8F8F7] text-[#171717] text-xs font-medium rounded-lg transition-colors"
+                  >
+                    Reset all filters
+                  </button>
+                )}
               </div>
             ) : (
               <div className={

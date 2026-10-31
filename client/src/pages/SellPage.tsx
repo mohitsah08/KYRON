@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useRouter } from '../context/RouterContext.tsx';
 import { useAuth } from '../context/AuthContext.tsx';
+import { loginPathFor } from '../utils/authHelpers.ts';
 import { api } from '../utils/api.ts';
 import { PlusCircle, ShieldCheck, DollarSign, Sparkles, CheckCircle2, AlertTriangle, ArrowRight } from 'lucide-react';
 
@@ -51,7 +52,7 @@ compatibility: [claude-code, cursor, mcp]
   const handlePublish = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) {
-      navigate('/auth');
+      navigate(loginPathFor(window.location.pathname + window.location.search));
       return;
     }
     setPublishing(true);

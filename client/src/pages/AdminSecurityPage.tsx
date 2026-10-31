@@ -1,71 +1,66 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { SideNav } from '../components/SideNav.tsx';
-import { SecuritySubmission } from '../types.ts';
+import { api } from '../utils/api.ts';
 
 export function AdminSecurityPage() {
-  const [selectedId, setSelectedId] = useState<string>('sub_1');
+  const [submissions, setSubmissions] = useState<any[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
+  const [feedbackInput, setFeedbackInput] = useState<string>('');
+  const [processing, setProcessing] = useState<boolean>(false);
 
-  const [submissions, setSubmissions] = useState<SecuritySubmission[]>([
-    {
-      id: 'sub_1',
-      skill_name: 'QuantumRAG Engine',
-      version: 'v1.2.0-beta',
-      creator: '@axiom_labs',
-      submitted_at: '2 hrs ago',
-      ast_status: 'Passed',
-      review_status: 'Pending',
-      summary: 'Quantum-inspired probabilistic vector state retrieval engine for ultra-dense context windows.',
-      nodes_scanned: 1248,
-      network_egress: 'Hermetic / No external sockets',
-      reproducibility: '100% Deterministic WASM'
-    },
-    {
-      id: 'sub_2',
-      skill_name: 'AutoSolidity Auditor',
-      version: 'v0.9.4',
-      creator: '@vuln_hunter',
-      submitted_at: '5 hrs ago',
-      ast_status: 'Flagged',
-      review_status: 'In Review',
-      summary: 'Smart contract vulnerability scanner using symbolic execution.',
-      nodes_scanned: 4890,
-      network_egress: 'Warning: Unverified socket connection detected on port 9021',
-      reproducibility: 'Non-deterministic RPC calls'
-    },
-    {
-      id: 'sub_3',
-      skill_name: 'PromptMorph Transformer',
-      version: 'v2.0.1',
-      creator: '@prompt_craft',
-      submitted_at: '1 day ago',
-      ast_status: 'Passed',
-      review_status: 'Pending',
-      summary: 'Dynamic semantic prompt rewriting layer optimized for Claude 3.5 Sonnet agent tool calling.',
-      nodes_scanned: 312,
-      network_egress: 'Hermetic / stdio pipe only',
-      reproducibility: '100% Deterministic'
+  const loadQueue = async () => {
+    try {
+      setLoading(true);
+      const res = await api.getAdminSubmissions();
+      setSubmissions(res.submissions || []);
+      if (res.submissions?.length > 0 && !selectedId) {
+        setSelectedId(res.submissions[0].id);
+      }
+    } catch (err: any) {
+      console.error('Failed to load admin queue:', err);
+    } finally {
+      setLoading(false);
     }
-  ]);
-
-  const activeSubmission = submissions.find(s => s.id === selectedId) || submissions[0];
-
-  const handleApprove = () => {
-    setSubmissions(submissions.map(s => s.id === activeSubmission.id ? { ...s, review_status: 'Approved' } : s));
-    setActionNotice(`Approved "${activeSubmission.skill_name}". Published to Kyron Registry.`);
-    setTimeout(() => setActionNotice(null), 3000);
   };
 
-  const handleFlag = () => {
-    setSubmissions(submissions.map(s => s.id === activeSubmission.id ? { ...s, review_status: 'In Review', ast_status: 'Flagged' } : s));
-    setActionNotice(`Flagged "${activeSubmission.skill_name}" for deep decompilation audit.`);
-    setTimeout(() => setActionNotice(null), 3000);
+  useEffect(() => {
+    loadQueue();
+  }, []);
+
+  const activeSubmission = submissions.find(s => s.id === selectedId) || submissions[0] || null;
+
+  const handleApprove = async () => {
+    if (!activeSubmission) return;
+    try {
+      setProcessing(true);
+      await api.reviewSubmission(activeSubmission.id, 'approve', feedbackInput || 'Verified compliant with KYRON packaging standards.');
+      setActionNotice(`Approved "${activeSubmission.skill_name}". Status updated to Approved.`);
+      setFeedbackInput('');
+      await loadQueue();
+    } catch (err: any) {
+      setActionNotice(`Failed: ${err.message}`);
+    } finally {
+      setProcessing(false);
+      setTimeout(() => setActionNotice(null), 4000);
+    }
   };
 
-  const handleReject = () => {
-    setSubmissions(submissions.filter(s => s.id !== activeSubmission.id));
-    setActionNotice(`Rejected "${activeSubmission.skill_name}". Submitter notified.`);
-    setTimeout(() => setActionNotice(null), 3000);
+  const handleReject = async () => {
+    if (!activeSubmission) return;
+    try {
+      setProcessing(true);
+      await api.reviewSubmission(activeSubmission.id, 'reject', feedbackInput || 'Submission does not meet quality or safety standards.');
+      setActionNotice(`Rejected "${activeSubmission.skill_name}". Creator notified.`);
+      setFeedbackInput('');
+      await loadQueue();
+    } catch (err: any) {
+      setActionNotice(`Failed: ${err.message}`);
+    } finally {
+      setProcessing(false);
+      setTimeout(() => setActionNotice(null), 4000);
+    }
   };
 
   return (
@@ -87,24 +82,18 @@ export function AdminSecurityPage() {
                   Trust, Safety & Review Console
                 </h1>
                 <p className="font-body-sm text-body-sm text-text-secondary mt-1">
-                  Moderate published skills, inspect automated AST static analysis results, and review compliance flags.
+                  Moderate published skills, inspect automated static security analysis results, and review compliance flags.
                 </p>
               </div>
 
               <div className="flex items-center gap-3 shrink-0">
                 <button 
-                  onClick={() => alert('Refreshing queue stream from AST scanner daemon...')}
+                  onClick={loadQueue}
+                  disabled={loading}
                   className="px-3 py-2 bg-bg-canvas border border-border-subtle rounded text-body-md font-body-md text-text-primary hover:bg-bg-surface hover:border-border-strong transition-colors flex items-center gap-2"
                 >
                   <span className="material-symbols-outlined text-[18px]">sync</span>
-                  <span>Refresh Stream</span>
-                </button>
-                <button 
-                  onClick={() => alert('Batch verification: Approved all passed submissions in queue.')}
-                  className="px-3.5 py-2 bg-primary-container text-white rounded text-body-md font-medium hover:bg-accent-hover transition-colors flex items-center gap-2 active:scale-[0.99] shadow-xs"
-                >
-                  <span className="material-symbols-outlined text-[18px]">bolt</span>
-                  <span>Batch Verify (2)</span>
+                  <span>{loading ? 'Refreshing...' : 'Refresh Stream'}</span>
                 </button>
               </div>
             </div>
@@ -150,7 +139,7 @@ export function AdminSecurityPage() {
                   <span className="text-label-md font-label-md text-status-success">+0.3%</span>
                 </div>
                 <div className="mt-3 text-label-sm font-label-sm text-text-secondary">
-                  AST & Sandbox tests (342 runs today)
+                  Static Security & Sandbox tests (342 runs today)
                 </div>
               </div>
 
@@ -185,166 +174,214 @@ export function AdminSecurityPage() {
             </section>
 
             {/* Split View: Queue & Inspector */}
-            <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
-              
-              {/* Queue Table (7 cols) */}
-              <div className="xl:col-span-7 bg-bg-canvas border border-border-subtle rounded-xl flex flex-col overflow-hidden shadow-xs">
-                <div className="p-4 border-b border-border-subtle flex items-center justify-between bg-bg-surface/50">
-                  <div className="flex items-center gap-3">
-                    <span className="font-headline-md text-body-lg font-medium text-text-primary">Submissions Queue</span>
-                    <span className="px-2 py-0.5 text-label-sm font-label-sm rounded bg-border-subtle text-text-secondary">
-                      {submissions.length} Records
-                    </span>
-                  </div>
+            {submissions.length === 0 ? (
+              <div className="bg-bg-canvas border border-border-subtle rounded-2xl p-12 text-center max-w-xl mx-auto shadow-xs">
+                <div className="w-16 h-16 rounded-2xl bg-bg-surface border border-border-subtle flex items-center justify-center mx-auto mb-4 text-primary">
+                  <span className="material-symbols-outlined text-[32px]">checklist</span>
                 </div>
-
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse text-body-sm">
-                    <thead>
-                      <tr className="border-b border-border-subtle text-label-sm font-label-sm text-text-secondary uppercase tracking-wider bg-bg-surface/30 font-semibold">
-                        <th className="py-3 px-4">Skill Unit</th>
-                        <th className="py-3 px-4">Creator</th>
-                        <th className="py-3 px-4">Submitted</th>
-                        <th className="py-3 px-4">AST Scan</th>
-                        <th className="py-3 px-4">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border-subtle">
-                      {submissions.map(sub => {
-                        const isSelected = sub.id === activeSubmission.id;
-                        return (
-                          <tr 
-                            key={sub.id}
-                            onClick={() => setSelectedId(sub.id)}
-                            className={`cursor-pointer transition-colors ${
-                              isSelected 
-                                ? 'bg-accent-tint/40 border-l-4 border-l-primary-container' 
-                                : 'hover:bg-bg-surface'
-                            }`}
-                          >
-                            <td className="py-3.5 px-4">
-                              <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded bg-bg-surface border border-border-subtle flex items-center justify-center font-code-sm font-semibold text-text-primary shrink-0">
-                                  {sub.skill_name.substring(0, 2).toUpperCase()}
-                                </div>
-                                <div className="min-w-0">
-                                  <div className="font-medium text-text-primary truncate">{sub.skill_name}</div>
-                                  <span className="font-code-sm text-xs text-text-tertiary">{sub.version}</span>
-                                </div>
-                              </div>
-                            </td>
-                            <td className="py-3.5 px-4 font-code-sm text-text-secondary">{sub.creator}</td>
-                            <td className="py-3.5 px-4 text-text-secondary text-xs">{sub.submitted_at}</td>
-                            <td className="py-3.5 px-4">
-                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-label-sm font-label-sm border ${
-                                sub.ast_status === 'Passed' 
-                                  ? 'bg-[#ECFDF5] text-status-success border-[#A7F3D0]' 
-                                  : 'bg-error-container text-status-error border-error'
-                              }`}>
-                                <span className="material-symbols-outlined text-[13px]">
-                                  {sub.ast_status === 'Passed' ? 'check_circle' : 'warning'}
-                                </span>
-                                {sub.ast_status}
-                              </span>
-                            </td>
-                            <td className="py-3.5 px-4">
-                              <span className="px-2 py-0.5 rounded text-label-sm font-label-sm bg-accent-tint text-primary font-medium border border-outline-variant">
-                                {sub.review_status.toUpperCase()}
-                              </span>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-
-                <div className="p-3 border-t border-border-subtle bg-bg-surface/30 flex items-center justify-between text-label-sm font-label-sm text-text-secondary">
-                  <span>Showing {submissions.length} submissions requiring clearance</span>
-                  <span className="text-text-tertiary">Sort: FIFO</span>
-                </div>
+                <h3 className="font-headline-md text-text-primary text-xl font-semibold mb-2">Review Queue Is Empty</h3>
+                <p className="text-body-sm text-text-secondary leading-relaxed mb-6">
+                  There are no creator skill packages awaiting administrative review or security clearance at this time.
+                </p>
+                <button
+                  onClick={loadQueue}
+                  className="px-4 py-2 bg-primary-container hover:bg-accent-hover text-white rounded-lg text-body-sm font-medium transition-all"
+                >
+                  Refresh Queue
+                </button>
               </div>
-
-              {/* Inspector Panel (5 cols) */}
-              <div className="xl:col-span-5 flex flex-col gap-5">
-                <div className="bg-bg-canvas border border-border-subtle rounded-xl p-6 shadow-xs space-y-6">
-                  
-                  {/* Header */}
-                  <div className="flex items-start justify-between pb-4 border-b border-border-subtle">
-                    <div>
-                      <h3 className="font-headline-md font-semibold text-text-primary text-body-lg">
-                        {activeSubmission.skill_name}
-                      </h3>
-                      <p className="font-code-sm text-xs text-text-secondary mt-0.5">
-                        {activeSubmission.version} • Submitter: <span className="text-text-primary font-medium">{activeSubmission.creator}</span>
-                      </p>
+            ) : (
+              <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+                
+                {/* Queue Table (7 cols) */}
+                <div className="xl:col-span-7 bg-bg-canvas border border-border-subtle rounded-xl flex flex-col overflow-hidden shadow-xs">
+                  <div className="p-4 border-b border-border-subtle flex items-center justify-between bg-bg-surface/50">
+                    <div className="flex items-center gap-3">
+                      <span className="font-headline-md text-body-lg font-medium text-text-primary">Submissions Queue</span>
+                      <span className="px-2 py-0.5 text-label-sm font-label-sm rounded bg-border-subtle text-text-secondary">
+                        {submissions.length} Records
+                      </span>
                     </div>
-                    <span className="text-code-sm font-code-sm px-2 py-0.5 rounded bg-bg-surface border border-border-subtle text-text-secondary">
-                      {activeSubmission.review_status}
-                    </span>
                   </div>
 
-                  {/* Summary */}
-                  <p className="text-body-sm text-text-secondary leading-relaxed">
-                    {activeSubmission.summary}
-                  </p>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse text-body-sm">
+                      <thead>
+                        <tr className="border-b border-border-subtle text-label-sm font-label-sm text-text-secondary uppercase tracking-wider bg-bg-surface/30 font-semibold">
+                          <th className="py-3 px-4">Skill Unit</th>
+                          <th className="py-3 px-4">Creator</th>
+                          <th className="py-3 px-4">Submitted</th>
+                          <th className="py-3 px-4">Validation</th>
+                          <th className="py-3 px-4">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border-subtle">
+                        {submissions.map(sub => {
+                          const isSelected = activeSubmission && sub.id === activeSubmission.id;
+                          const isValid = sub.validation_report?.valid !== false;
+                          const creatorDisplay = sub.creator_name || sub.creator_username || sub.creator_email || 'Unknown';
+                          return (
+                            <tr 
+                              key={sub.id}
+                              onClick={() => setSelectedId(sub.id)}
+                              className={`cursor-pointer transition-colors ${
+                                isSelected 
+                                  ? 'bg-accent-tint/40 border-l-4 border-l-primary-container' 
+                                  : 'hover:bg-bg-surface'
+                              }`}
+                            >
+                              <td className="py-3.5 px-4">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-8 h-8 rounded bg-bg-surface border border-border-subtle flex items-center justify-center font-code-sm font-semibold text-text-primary shrink-0">
+                                    {(sub.skill_name || 'SK').substring(0, 2).toUpperCase()}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <div className="font-medium text-text-primary truncate">{sub.skill_name}</div>
+                                    <span className="font-code-sm text-xs text-text-tertiary">{sub.category || 'Agent Skill'}</span>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="py-3.5 px-4 font-code-sm text-text-secondary truncate max-w-[120px]">{creatorDisplay}</td>
+                              <td className="py-3.5 px-4 text-text-secondary text-xs">{new Date(sub.submitted_at).toLocaleDateString()}</td>
+                              <td className="py-3.5 px-4">
+                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-label-sm font-label-sm border ${
+                                  isValid 
+                                    ? 'bg-[#ECFDF5] text-status-success border-[#A7F3D0]' 
+                                    : 'bg-error-container text-status-error border-error'
+                                }`}>
+                                  <span className="material-symbols-outlined text-[13px]">
+                                    {isValid ? 'check_circle' : 'warning'}
+                                  </span>
+                                  {isValid ? 'Passed' : 'Issues'}
+                                </span>
+                              </td>
+                              <td className="py-3.5 px-4">
+                                <span className={`px-2 py-0.5 rounded text-label-sm font-label-sm font-medium border ${
+                                  sub.status === 'approved'
+                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                    : sub.status === 'rejected'
+                                    ? 'bg-rose-50 text-rose-700 border-rose-200'
+                                    : 'bg-accent-tint text-primary border-outline-variant'
+                                }`}>
+                                  {sub.status.toUpperCase()}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
 
-                  {/* AST Scan Checklist */}
-                  <div className="space-y-3 pt-2">
-                    <span className="text-label-sm font-label-sm uppercase tracking-wider text-text-secondary font-semibold block">
-                      AST Security & Sandboxing Report
-                    </span>
+                  <div className="p-3 border-t border-border-subtle bg-bg-surface/30 flex items-center justify-between text-label-sm font-label-sm text-text-secondary">
+                    <span>Showing {submissions.length} submissions requiring clearance</span>
+                    <span className="text-text-tertiary">Sort: FIFO</span>
+                  </div>
+                </div>
 
-                    <div className="p-3 bg-bg-surface border border-border-subtle rounded-lg space-y-2 text-xs font-code-sm">
-                      <div className="flex items-center justify-between">
-                        <span className="text-text-secondary">AST Nodes Scanned:</span>
-                        <span className="text-text-primary font-medium">{activeSubmission.nodes_scanned.toLocaleString()}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-text-secondary">Network Egress:</span>
-                        <span className={activeSubmission.network_egress.includes('Warning') ? 'text-status-error font-medium' : 'text-status-success font-medium'}>
-                          {activeSubmission.network_egress}
+                {/* Inspector Panel (5 cols) */}
+                <div className="xl:col-span-5 flex flex-col gap-5">
+                  {activeSubmission ? (
+                    <div className="bg-bg-canvas border border-border-subtle rounded-xl p-6 shadow-xs space-y-6">
+                      
+                      {/* Header */}
+                      <div className="flex items-start justify-between pb-4 border-b border-border-subtle">
+                        <div>
+                          <h3 className="font-headline-md font-semibold text-text-primary text-body-lg">
+                            {activeSubmission.skill_name}
+                          </h3>
+                          <p className="font-code-sm text-xs text-text-secondary mt-0.5">
+                            Category: <span className="text-text-primary font-medium">{activeSubmission.category || 'General'}</span> • Creator: <span className="text-text-primary font-medium">{activeSubmission.creator_name || activeSubmission.creator_username || activeSubmission.creator_email}</span>
+                          </p>
+                        </div>
+                        <span className="text-code-sm font-code-sm px-2 py-0.5 rounded bg-bg-surface border border-border-subtle text-text-secondary">
+                          {activeSubmission.pricing_type === 'paid' ? `$${activeSubmission.price}` : 'Free'}
                         </span>
                       </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-text-secondary">Reproducibility:</span>
-                        <span className="text-text-primary font-medium">{activeSubmission.reproducibility}</span>
+
+                      {/* Security & Validation Report */}
+                      <div className="space-y-3 pt-1">
+                        <span className="text-label-sm font-label-sm uppercase tracking-wider text-text-secondary font-semibold block">
+                          Automated Integrity & Static Scan
+                        </span>
+
+                        <div className="p-3 bg-bg-surface border border-border-subtle rounded-lg space-y-2 text-xs font-code-sm">
+                          <div className="flex items-center justify-between">
+                            <span className="text-text-secondary">Validation Status:</span>
+                            <span className={activeSubmission.validation_report?.valid !== false ? 'text-status-success font-medium' : 'text-status-error font-medium'}>
+                              {activeSubmission.validation_report?.valid !== false ? 'Passed Structure Checks' : 'Failed Checks'}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-text-secondary">Report Errors:</span>
+                            <span className="text-text-primary font-medium">{activeSubmission.validation_report?.errors?.length || 0} blocking</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-text-secondary">Report Warnings:</span>
+                            <span className="text-text-primary font-medium">{activeSubmission.validation_report?.warnings?.length || 0} notices</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-text-secondary">Files Manifested:</span>
+                            <span className="text-text-primary font-medium">{activeSubmission.validation_report?.fileCount || 1} file(s)</span>
+                          </div>
+                        </div>
                       </div>
+
+                      {/* Reviewer Feedback Input */}
+                      <div className="space-y-2">
+                        <label className="text-label-sm font-label-sm uppercase tracking-wider text-text-secondary font-semibold block">
+                          Reviewer Feedback & Decision Notes
+                        </label>
+                        <textarea
+                          rows={3}
+                          value={feedbackInput}
+                          onChange={(e) => setFeedbackInput(e.target.value)}
+                          placeholder="Provide constructive feedback for the creator explaining approval conditions or required changes..."
+                          className="w-full text-xs font-body-sm p-3 bg-bg-surface border border-border-subtle rounded-lg focus:outline-none focus:border-primary-container text-text-primary"
+                        />
+                      </div>
+
+                      {/* Actions */}
+                      <div className="space-y-2 pt-2 border-t border-border-subtle">
+                        <button 
+                          onClick={handleApprove}
+                          disabled={processing}
+                          className="w-full h-10 bg-primary-container hover:bg-accent-hover disabled:opacity-50 text-white rounded-lg text-body-sm font-medium flex items-center justify-center gap-2 transition-all active:scale-[0.99] shadow-xs"
+                        >
+                          <span className="material-symbols-outlined text-[18px]">verified</span>
+                          <span>{processing ? 'Processing...' : 'Approve & Clear for Publishing'}</span>
+                        </button>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          <button 
+                            onClick={() => setFeedbackInput('Please enhance SKILL.md documentation and ensure complete parameter specifications before resubmitting.')}
+                            disabled={processing}
+                            className="h-9 px-3 bg-bg-surface hover:bg-bg-canvas border border-border-subtle text-text-primary rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-colors"
+                          >
+                            <span className="material-symbols-outlined text-[15px] text-amber-500">edit_note</span>
+                            <span>Request Revisions</span>
+                          </button>
+                          <button 
+                            onClick={handleReject}
+                            disabled={processing}
+                            className="h-9 px-3 bg-bg-surface hover:bg-bg-canvas border border-border-subtle text-status-error rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-colors"
+                          >
+                            <span className="material-symbols-outlined text-[15px]">block</span>
+                            <span>Reject Submission</span>
+                          </button>
+                        </div>
+                      </div>
+
                     </div>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="space-y-2 pt-2 border-t border-border-subtle">
-                    <button 
-                      onClick={handleApprove}
-                      className="w-full h-10 bg-primary-container hover:bg-accent-hover text-white rounded-lg text-body-sm font-medium flex items-center justify-center gap-2 transition-all active:scale-[0.99] shadow-xs"
-                    >
-                      <span className="material-symbols-outlined text-[18px]">verified</span>
-                      <span>Approve & Publish to Registry</span>
-                    </button>
-
-                    <div className="grid grid-cols-2 gap-2">
-                      <button 
-                        onClick={handleFlag}
-                        className="h-9 px-3 bg-bg-surface hover:bg-bg-canvas border border-border-subtle text-text-primary rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-colors"
-                      >
-                        <span className="material-symbols-outlined text-[15px] text-amber-500">flag</span>
-                        <span>Flag for Audit</span>
-                      </button>
-                      <button 
-                        onClick={handleReject}
-                        className="h-9 px-3 bg-bg-surface hover:bg-bg-canvas border border-border-subtle text-status-error rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-colors"
-                      >
-                        <span className="material-symbols-outlined text-[15px]">block</span>
-                        <span>Reject</span>
-                      </button>
+                  ) : (
+                    <div className="bg-bg-canvas border border-border-subtle rounded-xl p-8 text-center text-text-secondary text-sm">
+                      Select a submission from the queue to view its security analysis and package inspection details.
                     </div>
-                  </div>
-
+                  )}
                 </div>
-              </div>
 
-            </div>
+              </div>
+            )}
 
           </main>
         </div>

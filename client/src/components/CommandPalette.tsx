@@ -55,11 +55,8 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
 
   const quickPages = [
     { title: 'Explore Marketplace', path: '/skills', icon: Sparkles, desc: 'Browse all verified skills' },
-    { title: 'Categories & Search', path: '/categories', icon: Folder, desc: '32 specialized AI domains' },
-    { title: 'MCP Connection Hub', path: '/mcp', icon: Terminal, desc: 'Connect Claude, Cursor, and Codex' },
-    { title: 'AI Chat Playground', path: '/chat', icon: Terminal, desc: 'Execute agent skills interactively' },
-    { title: 'Projects & Deliverables', path: '/projects', icon: Folder, desc: 'Manage agent workflows' },
-    { title: 'Trust & Safety Console', path: '/admin', icon: Shield, desc: 'Security scans and moderation' },
+    { title: 'Creator Studio', path: '/creator', icon: Terminal, desc: 'Create, manage, and publish skills' },
+    { title: 'Dashboard', path: '/dashboard', icon: Folder, desc: 'Your workspace overview' },
   ];
 
   const handleSelect = (path: string) => {

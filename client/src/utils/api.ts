@@ -48,12 +48,14 @@ export const api = {
     q?: string;
     limit?: number;
     offset?: number;
+    creator?: string;
   } = {}): Promise<{ skills: Skill[]; total: number }> {
     const searchParams = new URLSearchParams();
     if (params.category) searchParams.set('category', params.category);
     if (params.sort) searchParams.set('sort', params.sort);
     if (params.filter) searchParams.set('filter', params.filter);
     if (params.q) searchParams.set('q', params.q);
+    if (params.creator) searchParams.set('creator', params.creator);
     if (params.limit) searchParams.set('limit', String(params.limit));
     if (params.offset) searchParams.set('offset', String(params.offset));
     return request(`/api/skills?${searchParams.toString()}`);
@@ -107,6 +109,11 @@ export const api = {
     });
   },
 
+  async saveSkill(skillId: string): Promise<{ success?: boolean; saved: boolean; is_saved: boolean }> {
+    const res = await this.toggleSaveSkill(skillId, true);
+    return { ...res, is_saved: res.saved };
+  },
+
   // Reviews
   async submitReview(skillId: string, rating: number, comment: string): Promise<{ success: boolean; review: SkillReview; average_rating: number; review_count: number }> {
     return request(`/api/skills/${skillId}/reviews`, {
@@ -135,6 +142,15 @@ export const api = {
     });
   },
 
+  async purchaseWithCredit(skillId: string): Promise<{
+    success: boolean;
+    message: string;
+    purchase: UserPurchase;
+    remaining_balance: number;
+  }> {
+    return this.buySkillWithCredits(skillId);
+  },
+
   async topupCredits(amount: number): Promise<{
     success: boolean;
     message: string;
@@ -151,23 +167,108 @@ export const api = {
     return request('/api/purchases/library');
   },
 
-  // Creator
+  // Downloads & Installation Prompts
+  getMarkdownDownloadUrl(slug: string): string {
+    return `/api/skills/${slug}/download/markdown`;
+  },
+
+  getZipDownloadUrl(slug: string): string {
+    return `/api/skills/${slug}/download/zip`;
+  },
+
+  getPromptDownloadUrl(slug: string, agent: string): string {
+    return `/api/skills/${slug}/prompt?agent=${encodeURIComponent(agent)}&download=1`;
+  },
+
+  async getSkillPrompt(slug: string, agent: string = 'generic'): Promise<{
+    skill_id: string;
+    skill_name: string;
+    slug: string;
+    agent: string;
+    prompt: string;
+    install_path: string;
+    has_supporting_files: boolean;
+    file_count: number;
+  }> {
+    return request(`/api/skills/${slug}/prompt?agent=${encodeURIComponent(agent)}`);
+  },
+
+  // Creator Studio Management
+  async getCreatorSkills(): Promise<{ skills: Skill[]; count: number }> {
+    return request('/api/creator/skills');
+  },
+
+  async getCreatorSkill(id: string): Promise<{ skill: Skill; package: { version: string; skill_md_content: string; files: Record<string, string> } }> {
+    return request(`/api/creator/skills/${id}`);
+  },
+
+  async validatePackage(payload: {
+    type: 'zip' | 'markdown' | 'plain_md' | 'skill_md';
+    content?: string;
+    base64?: string;
+    files?: Array<{ name: string; content: string }>;
+    filename?: string;
+    nameHint?: string;
+  }): Promise<{
+    valid: boolean;
+    converted?: boolean;
+    skillName?: string;
+    description?: string;
+    version?: string;
+    license?: string;
+    skill_md_content?: string;
+    extracted_frontmatter?: any;
+    extracted_instructions?: string;
+    files?: Array<{ name: string; content: string }>;
+    files_count?: number;
+    warnings: string[];
+    errors?: string[];
+    security_scan?: any;
+  }> {
+    return request('/api/creator/validate-package', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  },
+
+  async updateSkill(id: string, payload: any): Promise<{ success: boolean; message: string }> {
+    return request(`/api/creator/skills/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload)
+    });
+  },
+
+  async toggleUnpublish(id: string): Promise<{ success: boolean; status: 'draft' | 'live'; message: string }> {
+    return request(`/api/creator/skills/${id}/unpublish`, {
+      method: 'POST'
+    });
+  },
+
   async publishSkill(payload: {
     name: string;
-    slug: string;
+    slug?: string;
     summary: string;
     description: string;
     category: string;
     tags: string[];
     pricing_type: 'free' | 'paid';
     price?: number;
-    skill_md_content: string;
-    files?: Record<string, string>;
+    version?: string;
+    license?: string;
+    compatibility?: string;
+    compatibility_type?: string;
+    skill_md_content?: string;
+    instructions?: string;
+    status?: string;
+    files?: Array<{ name?: string; path?: string; content: string }>;
+    supporting_files?: Array<{ name?: string; path?: string; content: string }>;
+    is_draft?: boolean;
   }): Promise<{
     success: boolean;
     skill_id: string;
     slug: string;
     security_status: string;
+    status: string;
     audit_report: Array<{ rule_name: string; status: 'pass' | 'fail'; details: string }>;
   }> {
     return request('/api/creator/publish', {
@@ -176,8 +277,85 @@ export const api = {
     });
   },
 
-  async getCreatorAnalytics(): Promise<{ analytics: CreatorAnalytics }> {
+  async getCreatorAnalytics(): Promise<{ analytics: CreatorAnalytics; funnel?: any }> {
     return request('/api/creator/analytics');
+  },
+
+  async getCreatorOverview(): Promise<{
+    metrics: {
+      total_skills: number;
+      draft_count: number;
+      submitted_count: number;
+      approved_count: number;
+      published_count: number;
+      rejected_count: number;
+      paused_count: number;
+      total_views: number;
+      total_downloads: number;
+      gross_revenue: number;
+      net_earnings: number;
+    };
+    recent_skills: Skill[];
+    recent_submissions: any[];
+  }> {
+    return request('/api/creator/overview');
+  },
+
+  async submitSkillForReview(id: string): Promise<{ success: boolean; submission_id: string; status: string; message: string }> {
+    return request(`/api/creator/skills/${id}/submit`, { method: 'POST' });
+  },
+
+  async publishApprovedSkill(id: string): Promise<{ success: boolean; status: string; message: string }> {
+    return request(`/api/creator/skills/${id}/publish`, { method: 'POST' });
+  },
+
+  async pauseSkill(id: string): Promise<{ success: boolean; status: string; message: string }> {
+    return request(`/api/creator/skills/${id}/pause`, { method: 'POST' });
+  },
+
+  async resumeSkill(id: string): Promise<{ success: boolean; status: string; message: string }> {
+    return request(`/api/creator/skills/${id}/resume`, { method: 'POST' });
+  },
+
+  async deleteSkill(id: string): Promise<{ success: boolean; message: string }> {
+    return request(`/api/creator/skills/${id}`, { method: 'DELETE' });
+  },
+
+  async getCreatorSubmissions(): Promise<{ submissions: any[] }> {
+    return request('/api/creator/submissions');
+  },
+
+  async getSkillVersions(id: string): Promise<{ versions: any[] }> {
+    return request(`/api/creator/skills/${id}/versions`);
+  },
+
+  async createSkillVersion(id: string, payload: { version_number: string; changelog?: string; file_manifest?: any }): Promise<{ success: boolean; version_id: string; version_number: string }> {
+    return request(`/api/creator/skills/${id}/versions`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  },
+
+  async getCreatorProfile(): Promise<{ profile: any }> {
+    return request('/api/creator/profile');
+  },
+
+  async updateCreatorProfile(payload: { display_name?: string; bio?: string; website_url?: string; avatar_url?: string; onboarding_completed?: boolean }): Promise<{ success: boolean; profile: any }> {
+    return request('/api/creator/profile', {
+      method: 'PUT',
+      body: JSON.stringify(payload)
+    });
+  },
+
+  async getAdminSubmissions(): Promise<{ submissions: any[] }> {
+    return request('/api/creator/admin/submissions');
+  },
+
+  async reviewSubmission(id: string, action: 'approve' | 'reject', feedback?: string): Promise<{ success: boolean; status: string; message: string }> {
+    return request(`/api/creator/admin/submissions/${id}/review`, {
+      method: 'POST',
+      body: JSON.stringify({ action, feedback })
+    });
   },
 
   // Auth
@@ -203,16 +381,23 @@ export const api = {
     return request('/api/auth/me');
   },
 
-  // MCP JSON-RPC
+  async updateProfile(updates: Partial<Profile>): Promise<{ user: Profile }> {
+    return request('/api/auth/me', {
+      method: 'PUT',
+      body: JSON.stringify(updates)
+    });
+  },
+
   async callMcp(method: string, params: any = {}): Promise<any> {
-    return request('/api/mcp', {
+    const payload = {
+      jsonrpc: '2.0',
+      id: Math.floor(Math.random() * 1000000),
+      method,
+      params
+    };
+    return request('/mcp', {
       method: 'POST',
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: Date.now(),
-        method,
-        params
-      })
+      body: JSON.stringify(payload)
     });
   }
 };

@@ -286,131 +286,94 @@ export function DashboardPage() {
 
               {/* Cards Row */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                {/* Skill 1: OctoCode Architect */}
-                <div className="bg-bg-canvas border border-border-subtle rounded-xl p-5 hover:border-border-strong transition-all duration-150 flex flex-col justify-between group">
-                  <div>
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-7 h-7 rounded bg-accent-tint border border-primary-container/20 flex items-center justify-center text-primary-container">
-                          <span className="material-symbols-outlined text-[16px]">terminal</span>
+                {skills && skills.length > 0 ? (
+                  skills.map(skill => (
+                    <div key={skill.id} className="bg-bg-canvas border border-border-subtle rounded-xl p-5 hover:border-border-strong transition-all duration-150 flex flex-col justify-between group">
+                      <div>
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-7 h-7 rounded bg-accent-tint border border-primary-container/20 flex items-center justify-center text-primary-container">
+                              <span className="material-symbols-outlined text-[16px]">terminal</span>
+                            </div>
+                            <div>
+                              <span className="font-code-sm text-code-sm text-text-primary font-medium">{skill.creator_username || 'kyron'}/{skill.slug}</span>
+                              <div className="font-code-sm text-[10px] text-text-tertiary">v{skill.current_version || '1.0'} • {skill.pricing_type}</div>
+                            </div>
+                          </div>
+                          <span className="px-1.5 py-0.5 bg-accent-tint text-primary-container border border-primary-container/20 rounded font-code-sm text-[11px] font-medium">
+                            ★ {Number(skill.average_rating || 5.0).toFixed(1)}
+                          </span>
                         </div>
-                        <div>
-                          <span className="font-code-sm text-code-sm text-text-primary font-medium">kyron/octocode</span>
-                          <div className="font-code-sm text-[10px] text-text-tertiary">v3.2.1 • core</div>
-                        </div>
-                      </div>
-                      <span className="px-1.5 py-0.5 bg-accent-tint text-primary-container border border-primary-container/20 rounded font-code-sm text-[11px] font-medium">
-                        68ms
-                      </span>
-                    </div>
-                    <h3 className="font-headline-md text-body-lg font-semibold text-text-primary mb-1">OctoCode Architect</h3>
-                    <p className="font-body-sm text-body-sm text-text-secondary mb-4 line-clamp-2">
-                      Autonomous AST refactoring, structural migration synthesis, and continuous architecture linting.
-                    </p>
-                    <div className="flex flex-wrap gap-1.5 mb-5">
-                      <span className="px-2 py-0.5 rounded bg-bg-surface border border-border-subtle text-text-secondary font-code-sm text-[11px]">Rust/Go</span>
-                      <span className="px-2 py-0.5 rounded bg-bg-surface border border-border-subtle text-text-secondary font-code-sm text-[11px]">Static-Analysis</span>
-                      <span className="px-2 py-0.5 rounded bg-bg-surface border border-border-subtle text-text-secondary font-code-sm text-[11px]">AST-Gen</span>
-                    </div>
-                  </div>
-                  <div className="pt-3 border-t border-border-subtle flex items-center justify-between">
-                    <div>
-                      <span className="font-code-sm text-code-sm text-text-primary font-medium">0.0024</span>
-                      <span className="font-code-sm text-[10px] text-text-tertiary"> KYR / call</span>
-                    </div>
-                    <button 
-                      onClick={() => navigate('/chat')}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded bg-bg-canvas border border-border-subtle hover:border-text-primary hover:bg-bg-surface text-text-primary font-body-md text-body-sm transition-colors active:scale-[0.99]"
-                    >
-                      <span className="material-symbols-outlined text-[15px]">play_arrow</span>
-                      <span>Open Terminal / Run</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Skill 2: SchemaForge */}
-                <div className="bg-bg-canvas border border-border-subtle rounded-xl p-5 hover:border-border-strong transition-all duration-150 flex flex-col justify-between group">
-                  <div>
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-7 h-7 rounded bg-bg-surface border border-border-subtle flex items-center justify-center text-text-primary">
-                          <span className="material-symbols-outlined text-[16px]">schema</span>
-                        </div>
-                        <div>
-                          <span className="font-code-sm text-code-sm text-text-primary font-medium">kyron/schemaforge</span>
-                          <div className="font-code-sm text-[10px] text-text-tertiary">v1.9.0 • verified</div>
+                        <h3 className="font-headline-md text-body-lg font-semibold text-text-primary mb-1">{skill.name}</h3>
+                        <p className="font-body-sm text-body-sm text-text-secondary mb-4 line-clamp-2">
+                          {skill.summary}
+                        </p>
+                        <div className="flex flex-wrap gap-1.5 mb-5">
+                          <span className="px-2 py-0.5 rounded bg-bg-surface border border-border-subtle text-text-secondary font-code-sm text-[11px] capitalize">{skill.category.replace(/-/g, ' ')}</span>
+                          <span className="px-2 py-0.5 rounded bg-bg-surface border border-border-subtle text-text-secondary font-code-sm text-[11px]">{skill.install_count} installs</span>
                         </div>
                       </div>
-                      <span className="px-1.5 py-0.5 bg-bg-surface text-text-secondary border border-border-subtle rounded font-code-sm text-[11px]">
-                        92ms
-                      </span>
-                    </div>
-                    <h3 className="font-headline-md text-body-lg font-semibold text-text-primary mb-1">SchemaForge</h3>
-                    <p className="font-body-sm text-body-sm text-text-secondary mb-4 line-clamp-2">
-                      Declarative zero-loss database schema transformations, PostgreSQL vector indexing, and migrations.
-                    </p>
-                    <div className="flex flex-wrap gap-1.5 mb-5">
-                      <span className="px-2 py-0.5 rounded bg-bg-surface border border-border-subtle text-text-secondary font-code-sm text-[11px]">Postgres</span>
-                      <span className="px-2 py-0.5 rounded bg-bg-surface border border-border-subtle text-text-secondary font-code-sm text-[11px]">Vector</span>
-                      <span className="px-2 py-0.5 rounded bg-bg-surface border border-border-subtle text-text-secondary font-code-sm text-[11px]">Prisma</span>
-                    </div>
-                  </div>
-                  <div className="pt-3 border-t border-border-subtle flex items-center justify-between">
-                    <div>
-                      <span className="font-code-sm text-code-sm text-text-primary font-medium">0.0018</span>
-                      <span className="font-code-sm text-[10px] text-text-tertiary"> KYR / call</span>
-                    </div>
-                    <button 
-                      onClick={() => navigate('/chat')}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded bg-bg-canvas border border-border-subtle hover:border-text-primary hover:bg-bg-surface text-text-primary font-body-md text-body-sm transition-colors active:scale-[0.99]"
-                    >
-                      <span className="material-symbols-outlined text-[15px]">play_arrow</span>
-                      <span>Open Terminal / Run</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Skill 3: VectorData Pipeline */}
-                <div className="bg-bg-canvas border border-border-subtle rounded-xl p-5 hover:border-border-strong transition-all duration-150 flex flex-col justify-between group">
-                  <div>
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-7 h-7 rounded bg-bg-surface border border-border-subtle flex items-center justify-center text-text-primary">
-                          <span className="material-symbols-outlined text-[16px]">hub</span>
-                        </div>
+                      <div className="pt-3 border-t border-border-subtle flex items-center justify-between">
                         <div>
-                          <span className="font-code-sm text-code-sm text-text-primary font-medium">kyron/vectordata</span>
-                          <div className="font-code-sm text-[10px] text-text-tertiary">v2.1.0 • enterprise</div>
+                          <span className="font-code-sm text-code-sm text-text-primary font-medium">
+                            {Number(skill.price) === 0 ? 'FREE' : `$${Number(skill.price).toFixed(2)}`}
+                          </span>
+                        </div>
+                        <button 
+                          onClick={() => navigate(`/skills/${skill.slug}`)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded bg-bg-canvas border border-border-subtle hover:border-text-primary hover:bg-bg-surface text-text-primary font-body-md text-body-sm transition-colors active:scale-[0.99]"
+                        >
+                          <span className="material-symbols-outlined text-[15px]">play_arrow</span>
+                          <span>Launch Skill</span>
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <>
+                    {/* Skill 1: OctoCode Architect */}
+                    <div className="bg-bg-canvas border border-border-subtle rounded-xl p-5 hover:border-border-strong transition-all duration-150 flex flex-col justify-between group">
+                      <div>
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-7 h-7 rounded bg-accent-tint border border-primary-container/20 flex items-center justify-center text-primary-container">
+                              <span className="material-symbols-outlined text-[16px]">terminal</span>
+                            </div>
+                            <div>
+                              <span className="font-code-sm text-code-sm text-text-primary font-medium">kyron/octocode</span>
+                              <div className="font-code-sm text-[10px] text-text-tertiary">v3.2.1 • core</div>
+                            </div>
+                          </div>
+                          <span className="px-1.5 py-0.5 bg-accent-tint text-primary-container border border-primary-container/20 rounded font-code-sm text-[11px] font-medium">
+                            68ms
+                          </span>
+                        </div>
+                        <h3 className="font-headline-md text-body-lg font-semibold text-text-primary mb-1">OctoCode Architect</h3>
+                        <p className="font-body-sm text-body-sm text-text-secondary mb-4 line-clamp-2">
+                          Autonomous AST refactoring, structural migration synthesis, and continuous architecture linting.
+                        </p>
+                        <div className="flex flex-wrap gap-1.5 mb-5">
+                          <span className="px-2 py-0.5 rounded bg-bg-surface border border-border-subtle text-text-secondary font-code-sm text-[11px]">Rust/Go</span>
+                          <span className="px-2 py-0.5 rounded bg-bg-surface border border-border-subtle text-text-secondary font-code-sm text-[11px]">Static-Analysis</span>
+                          <span className="px-2 py-0.5 rounded bg-bg-surface border border-border-subtle text-text-secondary font-code-sm text-[11px]">AST-Gen</span>
                         </div>
                       </div>
-                      <span className="px-1.5 py-0.5 bg-bg-surface text-text-secondary border border-border-subtle rounded font-code-sm text-[11px]">
-                        114ms
-                      </span>
+                      <div className="pt-3 border-t border-border-subtle flex items-center justify-between">
+                        <div>
+                          <span className="font-code-sm text-code-sm text-text-primary font-medium">0.0024</span>
+                          <span className="font-code-sm text-[10px] text-text-tertiary"> KYR / call</span>
+                        </div>
+                        <button 
+                          onClick={() => navigate('/chat')}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded bg-bg-canvas border border-border-subtle hover:border-text-primary hover:bg-bg-surface text-text-primary font-body-md text-body-sm transition-colors active:scale-[0.99]"
+                        >
+                          <span className="material-symbols-outlined text-[15px]">play_arrow</span>
+                          <span>Open Terminal / Run</span>
+                        </button>
+                      </div>
                     </div>
-                    <h3 className="font-headline-md text-body-lg font-semibold text-text-primary mb-1">VectorData Pipeline</h3>
-                    <p className="font-body-sm text-body-sm text-text-secondary mb-4 line-clamp-2">
-                      High-throughput embeddings partitioner with deterministic chunking, semantic hashing, and streaming ingest.
-                    </p>
-                    <div className="flex flex-wrap gap-1.5 mb-5">
-                      <span className="px-2 py-0.5 rounded bg-bg-surface border border-border-subtle text-text-secondary font-code-sm text-[11px]">Embeddings</span>
-                      <span className="px-2 py-0.5 rounded bg-bg-surface border border-border-subtle text-text-secondary font-code-sm text-[11px]">HNSW</span>
-                      <span className="px-2 py-0.5 rounded bg-bg-surface border border-border-subtle text-text-secondary font-code-sm text-[11px]">ETL</span>
-                    </div>
-                  </div>
-                  <div className="pt-3 border-t border-border-subtle flex items-center justify-between">
-                    <div>
-                      <span className="font-code-sm text-code-sm text-text-primary font-medium">0.0032</span>
-                      <span className="font-code-sm text-[10px] text-text-tertiary"> KYR / call</span>
-                    </div>
-                    <button 
-                      onClick={() => navigate('/chat')}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded bg-bg-canvas border border-border-subtle hover:border-text-primary hover:bg-bg-surface text-text-primary font-body-md text-body-sm transition-colors active:scale-[0.99]"
-                    >
-                      <span className="material-symbols-outlined text-[15px]">play_arrow</span>
-                      <span>Open Terminal / Run</span>
-                    </button>
-                  </div>
-                </div>
+                  </>
+                )}
               </div>
             </section>
 

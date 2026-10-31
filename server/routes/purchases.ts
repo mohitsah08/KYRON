@@ -16,50 +16,54 @@ router.post('/free', requireAuth, async (req: AuthRequest, res: Response) => {
       return;
     }
 
-    const skill = await db.get(`SELECT id, name, price, pricing_type FROM skills WHERE id = ?`, [skillId]) as any;
+    const result = await db.withTransaction(async (tx) => {
+      const skill = await tx.get(`SELECT id, name, price, pricing_type FROM skills WHERE id = ?`, [skillId]) as any;
 
-    if (!skill) {
-      res.status(404).json({ error: 'Skill not found' });
-      return;
-    }
+      if (!skill) {
+        return { errorStatus: 404, error: 'Skill not found' };
+      }
 
-    if (skill.pricing_type !== 'free' && Number(skill.price) > 0) {
-      res.status(400).json({ error: 'This is a paid skill and cannot be installed for free.' });
-      return;
-    }
+      if (skill.pricing_type !== 'free' && Number(skill.price) > 0) {
+        return { errorStatus: 400, error: 'This is a paid skill and cannot be installed for free.' };
+      }
 
-    // Check if already owned
-    const existing = await db.get(`SELECT id, license_key FROM user_purchases WHERE user_id = ? AND skill_id = ?`, [userId, skill.id]) as any;
-    if (existing) {
-      res.json({
+      // Check if already owned
+      const existing = await tx.get(`SELECT id, license_key FROM user_purchases WHERE user_id = ? AND skill_id = ?`, [userId, skill.id]) as any;
+      if (existing) {
+        return {
+          success: true,
+          status: 'already_owned',
+          message: 'You already have this skill in your library.',
+          license_key: existing.license_key
+        };
+      }
+
+      const purchaseId = 'pur_' + crypto.randomUUID();
+      const licenseKey = 'KYRON-FREE-' + crypto.randomBytes(8).toString('hex').toUpperCase();
+      const now = new Date().toISOString();
+
+      await tx.run(`
+        INSERT INTO user_purchases (id, user_id, skill_id, amount_paid, license_key, purchased_at, status)
+        VALUES (?, ?, ?, 0.00, ?, ?, 'completed')
+        ON CONFLICT (id) DO NOTHING
+      `, [purchaseId, userId, skill.id, licenseKey, now]);
+
+      await tx.run(`UPDATE skills SET install_count = install_count + 1 WHERE id = ?`, [skill.id]);
+
+      return {
         success: true,
-        status: 'already_owned',
-        message: 'You already have this skill in your library.',
-        license_key: existing.license_key
-      });
+        status: 'installed',
+        message: `Skill "${skill.name}" successfully added to your agent library!`,
+        license_key: licenseKey
+      };
+    });
+
+    if ('errorStatus' in result) {
+      res.status(result.errorStatus).json({ error: result.error });
       return;
     }
 
-    const purchaseId = 'pur_' + crypto.randomUUID();
-    const licenseKey = 'KYRON-FREE-' + crypto.randomBytes(8).toString('hex').toUpperCase();
-    const now = new Date().toISOString();
-
-    // Record purchase
-    await db.run(`
-      INSERT INTO user_purchases (id, user_id, skill_id, amount_paid, license_key, purchased_at, status)
-      VALUES (?, ?, ?, 0.00, ?, ?, 'completed')
-      ON CONFLICT (id) DO NOTHING
-    `, [purchaseId, userId, skill.id, licenseKey, now]);
-
-    // Increment install count
-    await db.run(`UPDATE skills SET install_count = install_count + 1 WHERE id = ?`, [skill.id]);
-
-    res.json({
-      success: true,
-      status: 'installed',
-      message: `Skill "${skill.name}" successfully added to your agent library!`,
-      license_key: licenseKey
-    });
+    res.json(result);
   } catch (err: any) {
     console.error('Free install error:', err.message);
     res.status(500).json({ error: 'Failed to complete skill installation.' });
@@ -67,7 +71,7 @@ router.post('/free', requireAuth, async (req: AuthRequest, res: Response) => {
 });
 
 // 2. Pay With Credit (Or Admin Test Purchase)
-router.post('/credit', requireAuth, async (req: AuthRequest, res: Response) => {
+router.post(['/credit', '/buy-with-credit'], requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const skillId = req.body.skillId || req.body.skill_id;
     const userId = req.user!.id;
@@ -77,85 +81,103 @@ router.post('/credit', requireAuth, async (req: AuthRequest, res: Response) => {
       return;
     }
 
-    const skill = await db.get(`
-      SELECT s.id, s.name, s.price, s.pricing_type, d.discount_percent
-      FROM skills s
-      LEFT JOIN skill_deals d ON d.skill_id = s.id AND d.is_active = 1 AND datetime(d.expires_at) > datetime('now')
-      WHERE s.id = ?
-    `, [skillId]) as any;
+    const result = await db.withTransaction(async (tx) => {
+      const skill = await tx.get(`
+        SELECT s.id, s.name, s.price, s.pricing_type, d.discount_percent
+        FROM skills s
+        LEFT JOIN skill_deals d ON d.skill_id = s.id AND d.is_active = 1 AND datetime(d.expires_at) > datetime('now')
+        WHERE s.id = ?
+      `, [skillId]) as any;
 
-    if (!skill) {
-      res.status(404).json({ error: 'Skill not found' });
-      return;
-    }
+      if (!skill) {
+        return { errorStatus: 404, error: 'Skill not found' };
+      }
 
-    // Calculate actual price with active deal
-    let effectivePrice = Number(skill.price);
-    if (skill.discount_percent) {
-      effectivePrice = Number((Number(skill.price) * (1 - skill.discount_percent / 100)).toFixed(2));
-    }
+      // Calculate actual price with active deal
+      let effectivePrice = Number(skill.price);
+      if (skill.discount_percent) {
+        effectivePrice = Number((Number(skill.price) * (1 - skill.discount_percent / 100)).toFixed(2));
+      }
 
-    // Check user profile and credit balance
-    const profile = await db.get(`SELECT credit_balance, is_unlimited_credit_user FROM profiles WHERE id = ?`, [userId]) as any;
+      // Check user profile and credit balance
+      const profile = await tx.get(`SELECT credit_balance, is_unlimited_credit_user FROM profiles WHERE id = ?`, [userId]) as any;
 
-    if (!profile) {
-      res.status(404).json({ error: 'User profile not found' });
-      return;
-    }
+      if (!profile) {
+        return { errorStatus: 404, error: 'User profile not found' };
+      }
 
-    const isAdmin = profile.is_unlimited_credit_user === 1;
-    const currentBalance = Number(profile.credit_balance);
+      const isAdmin = profile.is_unlimited_credit_user === 1;
+      const currentBalance = Number(profile.credit_balance);
 
-    // Check already owned
-    const existing = await db.get(`SELECT id, license_key FROM user_purchases WHERE user_id = ? AND skill_id = ?`, [userId, skill.id]) as any;
-    if (existing) {
-      res.json({
+      // Check already owned
+      const existing = await tx.get(`SELECT id, license_key FROM user_purchases WHERE user_id = ? AND skill_id = ?`, [userId, skill.id]) as any;
+      if (existing) {
+        return {
+          success: true,
+          status: 'already_owned',
+          message: 'You already own this skill.',
+          license_key: existing.license_key
+        };
+      }
+
+      if (!isAdmin && currentBalance < effectivePrice) {
+        return {
+          errorStatus: 402,
+          error: `Insufficient credit balance. You have $${currentBalance.toFixed(2)}, but this skill costs $${effectivePrice.toFixed(2)}. Top up to continue.`,
+          balance: currentBalance,
+          required: effectivePrice,
+          needed: Number((effectivePrice - currentBalance).toFixed(2))
+        };
+      }
+
+      // Deduct balance with concurrency safety guard
+      if (!isAdmin) {
+        const updateRes = await tx.run(
+          `UPDATE profiles SET credit_balance = credit_balance - ? WHERE id = ? AND credit_balance >= ?`,
+          [effectivePrice, userId, effectivePrice]
+        );
+        if (updateRes.changes === 0) {
+          throw new Error('Concurrent modification detected during balance debit. Please retry.');
+        }
+      }
+
+      const purchaseId = 'pur_' + crypto.randomUUID();
+      const licenseKey = 'KYRON-LIC-' + crypto.randomBytes(8).toString('hex').toUpperCase();
+      const now = new Date().toISOString();
+
+      await tx.run(`
+        INSERT INTO user_purchases (id, user_id, skill_id, amount_paid, license_key, purchased_at, status)
+        VALUES (?, ?, ?, ?, ?, ?, 'completed')
+        ON CONFLICT (id) DO NOTHING
+      `, [purchaseId, userId, skill.id, isAdmin ? 0.00 : effectivePrice, licenseKey, now]);
+
+      await tx.run(`UPDATE skills SET install_count = install_count + 1 WHERE id = ?`, [skill.id]);
+
+      const updatedProfile = await tx.get(`SELECT credit_balance FROM profiles WHERE id = ?`, [userId]) as any;
+
+      return {
         success: true,
-        status: 'already_owned',
-        message: 'You already own this skill.',
-        license_key: existing.license_key
-      });
-      return;
-    }
-
-    if (!isAdmin && currentBalance < effectivePrice) {
-      res.status(402).json({
-        error: `Insufficient credit balance. You have $${currentBalance.toFixed(2)}, but this skill costs $${effectivePrice.toFixed(2)}. Top up to continue.`,
-        balance: currentBalance,
-        required: effectivePrice,
-        needed: Number((effectivePrice - currentBalance).toFixed(2))
-      });
-      return;
-    }
-
-    // Deduct balance if not admin
-    if (!isAdmin) {
-      await db.run(`UPDATE profiles SET credit_balance = credit_balance - ? WHERE id = ?`, [effectivePrice, userId]);
-    }
-
-    const purchaseId = 'pur_' + crypto.randomUUID();
-    const licenseKey = 'KYRON-LIC-' + crypto.randomBytes(8).toString('hex').toUpperCase();
-    const now = new Date().toISOString();
-
-    await db.run(`
-      INSERT INTO user_purchases (id, user_id, skill_id, amount_paid, license_key, purchased_at, status)
-      VALUES (?, ?, ?, ?, ?, ?, 'completed')
-      ON CONFLICT (id) DO NOTHING
-    `, [purchaseId, userId, skill.id, isAdmin ? 0.00 : effectivePrice, licenseKey, now]);
-
-    await db.run(`UPDATE skills SET install_count = install_count + 1 WHERE id = ?`, [skill.id]);
-
-    const updatedProfile = await db.get(`SELECT credit_balance FROM profiles WHERE id = ?`, [userId]) as any;
-
-    res.json({
-      success: true,
-      status: 'purchased',
-      message: isAdmin 
-        ? `Admin test purchase confirmed: "${skill.name}" unlocked without debiting real credits.`
-        : `Successfully purchased "${skill.name}" for $${effectivePrice.toFixed(2)}!`,
-      new_balance: Number(updatedProfile.credit_balance),
-      license_key: licenseKey
+        status: 'purchased',
+        message: isAdmin 
+          ? `Admin test purchase confirmed: "${skill.name}" unlocked without debiting real credits.`
+          : `Successfully purchased "${skill.name}" for $${effectivePrice.toFixed(2)}!`,
+        new_balance: Number(updatedProfile.credit_balance),
+        license_key: licenseKey,
+        purchase: {
+          id: purchaseId,
+          skill_id: skill.id,
+          amount_paid: effectivePrice,
+          license_key: licenseKey
+        }
+      };
     });
+
+    if ('errorStatus' in result) {
+      res.status(result.errorStatus).json(result);
+      return;
+    }
+
+    res.json(result);
   } catch (err: any) {
     console.error('Credit purchase error:', err.message);
     res.status(500).json({ error: 'Failed to process credit purchase.' });

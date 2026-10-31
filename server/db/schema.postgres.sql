@@ -19,12 +19,17 @@ CREATE TABLE IF NOT EXISTS profiles (
   email TEXT UNIQUE NOT NULL,
   password_hash TEXT,
   display_name TEXT NOT NULL,
+  full_name TEXT,
   username TEXT UNIQUE NOT NULL,
   bio TEXT,
   avatar_url TEXT,
+  role TEXT DEFAULT 'user',
   credit_balance NUMERIC(12, 2) DEFAULT 0.00,
   is_unlimited_credit_user INTEGER DEFAULT 0,
-  created_at TEXT NOT NULL
+  website_url TEXT,
+  onboarding_completed INTEGER DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TIMESTAMPTZ DEFAULT clock_timestamp()
 );
 
 CREATE TABLE IF NOT EXISTS skills (
@@ -43,7 +48,9 @@ CREATE TABLE IF NOT EXISTS skills (
   current_version TEXT DEFAULT '1.0',
   creator_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   security_status TEXT CHECK (security_status IN ('pass', 'fail', 'pending')) DEFAULT 'pass',
-  status TEXT CHECK (status IN ('live', 'draft', 'rejected')) DEFAULT 'live',
+  status TEXT CHECK (status IN ('draft', 'submitted', 'under_review', 'approved', 'published', 'live', 'rejected', 'paused')) DEFAULT 'draft',
+  visibility TEXT CHECK (visibility IN ('public', 'unlisted', 'private')) DEFAULT 'public',
+  rejection_feedback TEXT,
   install_count INTEGER DEFAULT 0,
   view_count INTEGER DEFAULT 0,
   net_votes INTEGER DEFAULT 0,
@@ -51,6 +58,7 @@ CREATE TABLE IF NOT EXISTS skills (
   review_count INTEGER DEFAULT 0,
   package_tree TEXT, -- JSON string representing file structure
   session_preview TEXT, -- JSON string representing sample interactive execution
+  license TEXT DEFAULT 'MIT',
   created_at TEXT NOT NULL
 );
 
@@ -112,7 +120,40 @@ CREATE TABLE IF NOT EXISTS skill_packages (
   version TEXT NOT NULL,
   skill_md_content TEXT NOT NULL,
   files_json TEXT NOT NULL,
+  storage_path TEXT,
   updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS skill_downloads (
+  id TEXT PRIMARY KEY,
+  skill_id TEXT NOT NULL REFERENCES skills(id) ON DELETE CASCADE,
+  user_id TEXT REFERENCES profiles(id) ON DELETE SET NULL,
+  version TEXT NOT NULL,
+  download_type TEXT CHECK (download_type IN ('markdown', 'zip', 'prompt')) NOT NULL,
+  downloaded_at TIMESTAMPTZ DEFAULT clock_timestamp()
+);
+
+CREATE TABLE IF NOT EXISTS skill_submissions (
+  id TEXT PRIMARY KEY,
+  skill_id TEXT NOT NULL REFERENCES skills(id) ON DELETE CASCADE,
+  version TEXT NOT NULL,
+  submitted_by TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  status TEXT NOT NULL CHECK (status IN ('submitted', 'under_review', 'approved', 'rejected')),
+  validation_report TEXT,
+  reviewer_feedback TEXT,
+  submitted_at TIMESTAMPTZ DEFAULT clock_timestamp(),
+  reviewed_at TIMESTAMPTZ,
+  reviewed_by TEXT REFERENCES profiles(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS skill_versions (
+  id TEXT PRIMARY KEY,
+  skill_id TEXT NOT NULL REFERENCES skills(id) ON DELETE CASCADE,
+  version_number TEXT NOT NULL,
+  changelog TEXT,
+  file_manifest TEXT,
+  created_at TIMESTAMPTZ DEFAULT clock_timestamp(),
+  UNIQUE (skill_id, version_number)
 );
 
 -- Performance Indexes
@@ -124,3 +165,8 @@ CREATE INDEX IF NOT EXISTS idx_user_purchases_user ON user_purchases(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_purchases_skill ON user_purchases(skill_id);
 CREATE INDEX IF NOT EXISTS idx_skill_reviews_skill ON skill_reviews(skill_id);
 CREATE INDEX IF NOT EXISTS idx_security_audit_skill ON security_audit_logs(skill_id);
+CREATE INDEX IF NOT EXISTS idx_skill_downloads_skill ON skill_downloads(skill_id);
+CREATE INDEX IF NOT EXISTS idx_skill_downloads_user ON skill_downloads(user_id);
+CREATE INDEX IF NOT EXISTS idx_skill_submissions_skill ON skill_submissions(skill_id);
+CREATE INDEX IF NOT EXISTS idx_skill_submissions_status ON skill_submissions(status);
+CREATE INDEX IF NOT EXISTS idx_skill_versions_skill ON skill_versions(skill_id);

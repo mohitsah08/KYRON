@@ -2,12 +2,15 @@ export interface Profile {
   id: string;
   email: string;
   display_name: string;
+  full_name?: string;
   username: string;
   bio?: string;
   avatar_url?: string;
+  role?: 'user' | 'creator' | 'admin' | string;
   credit_balance: number;
   is_unlimited_credit_user: number;
   created_at: string;
+  updated_at?: string;
 }
 
 export interface SkillDeal {
@@ -31,14 +34,17 @@ export interface Skill {
   subscription_price_monthly?: number;
   compatibility_type: string;
   current_version: string;
+  license?: string;
   creator_id: string;
   security_status: 'pass' | 'fail' | 'pending';
-  status: 'live' | 'draft' | 'rejected';
+  status: 'live' | 'draft' | 'rejected' | 'published' | 'submitted' | 'approved' | 'paused' | 'under_review';
+  rejection_feedback?: string;
   install_count: number;
   view_count: number;
   net_votes: number;
   average_rating: number;
   review_count: number;
+  rating_count?: number;
   package_tree?: any;
   session_preview?: any;
   created_at: string;
@@ -115,36 +121,51 @@ export interface CreatorAnalytics {
 export interface ProjectMilestone {
   id: string;
   title: string;
-  status: 'completed' | 'in_progress' | 'pending';
-  date: string;
+  status: 'completed' | 'in_progress' | 'pending' | 'Completed' | 'In Progress' | 'Pending';
+  date?: string;
+  due_date?: string;
+  agent?: string;
   description?: string;
 }
 
 export interface ProjectDeliverable {
   id: string;
   filename: string;
-  path: string;
+  path?: string;
   size: string;
+  hash?: string;
+  status?: 'Verified' | 'In Progress' | 'Pending' | string;
   lines_diff?: string;
-  type: 'code' | 'doc' | 'report' | 'schema';
+  type?: 'code' | 'doc' | 'report' | 'schema' | string;
   created_at: string;
 }
 
 export interface Project {
   id: string;
   title: string;
-  slug: string;
+  slug?: string;
   description: string;
-  status: 'active' | 'in_review' | 'completed' | 'archived';
-  priority: 'low' | 'medium' | 'high' | 'critical';
-  progress: number;
-  budget_credits: number;
-  assigned_skills: string[];
-  milestones: ProjectMilestone[];
-  deliverables: ProjectDeliverable[];
-  team_avatars: string[];
-  created_at: string;
-  updated_at: string;
+  status: 'active' | 'in_review' | 'completed' | 'archived' | 'In Progress' | 'Review Required' | 'Completed';
+  priority: 'low' | 'medium' | 'high' | 'critical' | 'Low' | 'Normal' | 'Medium' | 'High' | 'Critical';
+  run_id?: string;
+  owner?: string;
+  lead?: string;
+  team_count?: number;
+  agent_count?: number;
+  start_date?: string;
+  target_date?: string;
+  budget_spent?: number;
+  budget_total?: number;
+  milestones_completed?: number;
+  milestones_total?: number;
+  progress?: number;
+  budget_credits?: number;
+  assigned_skills?: string[];
+  milestones?: ProjectMilestone[];
+  deliverables?: ProjectDeliverable[];
+  team_avatars?: string[];
+  created_at?: string;
+  updated_at?: string;
 }
 
 // Workspace & Team Management Types
@@ -152,10 +173,13 @@ export interface TeamMember {
   id: string;
   name: string;
   email: string;
-  role: 'Owner' | 'Admin' | 'Developer' | 'Viewer';
-  avatar: string;
-  two_factor: boolean;
-  joined_at: string;
+  role: 'Owner' | 'Admin' | 'Developer' | 'Viewer' | 'Autonomous Agent';
+  type?: 'human' | 'agent';
+  security?: string;
+  status?: string;
+  avatar?: string;
+  two_factor?: boolean;
+  joined_at?: string;
   last_active: string;
 }
 
@@ -170,10 +194,11 @@ export interface TeamInvitation {
 export interface ApiKeyItem {
   id: string;
   name: string;
-  key_preview: string;
+  key_preview?: string;
+  key_prefix?: string;
   created_at: string;
   last_used: string;
-  status: 'active' | 'revoked';
+  status?: 'active' | 'revoked';
 }
 
 // AI Chat & Execution Types
@@ -185,26 +210,51 @@ export interface ToolInvocation {
   status: 'running' | 'success' | 'failed';
 }
 
+export interface ChatDiffLine {
+  type: 'context' | 'add' | 'remove';
+  text: string;
+}
+
+export interface ChatCodeSnippet {
+  filename: string;
+  language: string;
+  diffLines: ChatDiffLine[];
+}
+
+export interface ChatMetrics {
+  heapAllocation?: string;
+  throughput?: string;
+  cyclicRetention?: string;
+}
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant' | 'system';
   content: string;
   timestamp: string;
   tool_calls?: ToolInvocation[];
+  codeSnippet?: ChatCodeSnippet;
+  metrics?: ChatMetrics;
 }
 
 // Admin Trust & Security Types
 export interface SecuritySubmission {
   id: string;
-  name: string;
-  slug: string;
+  name?: string;
+  skill_name: string;
+  slug?: string;
   creator: string;
   version: string;
   submitted_at: string;
-  threat_level: 'Clean' | 'Low Risk' | 'Flagged' | 'High Risk';
-  ast_status: 'pass' | 'fail' | 'review';
-  rules_passed: number;
-  total_rules: number;
-  quarantined: boolean;
-  findings: string[];
+  summary?: string;
+  review_status?: 'Pending' | 'In Review' | 'Approved' | 'Rejected' | string;
+  threat_level?: 'Clean' | 'Low Risk' | 'Flagged' | 'High Risk';
+  ast_status?: 'Passed' | 'Flagged' | 'Failed' | 'pass' | 'fail' | 'review' | string;
+  rules_passed?: number;
+  total_rules?: number;
+  nodes_scanned?: number;
+  network_egress?: string;
+  reproducibility?: string;
+  quarantined?: boolean;
+  findings?: string[];
 }

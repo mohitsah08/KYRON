@@ -697,7 +697,7 @@ OctoCode Architect parses abstract syntax trees in memory to plan atomic multi-f
     INSERT OR REPLACE INTO skill_deals (id, skill_id, creator_id, discount_percent, expires_at, is_active)
     VALUES (?, ?, ?, ?, ?, ?)
   `);
-  const dealExpiry = new Date(Date.now() + 2 * 24 * 3600 * 1000).toISOString(); // 2 days from now
+  const dealExpiry = new Date(Date.now() + 365 * 24 * 3600 * 1000).toISOString(); // 1 year from now
   insertDeal.run('deal_geo_seo_month', 'skl_geo_seo_suite', 'usr_juan_gabriel', 33, dealExpiry, 1);
 
   // 4. Create Sample Reviews
@@ -880,5 +880,7 @@ kyron connect octocode-architect
   console.log('Database seeded successfully!');
 }
 
-runSeed();
+if (process.env.ALLOW_SEED === 'true' && import.meta.url === `file://${process.argv[1]}`) {
+  runSeed();
+}
 

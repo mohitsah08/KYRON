@@ -143,7 +143,7 @@ export function ProjectsPage() {
     if (filterPriority !== 'ALL' && p.priority !== filterPriority) return false;
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
-      return p.title.toLowerCase().includes(q) || p.description.toLowerCase().includes(q) || p.run_id.toLowerCase().includes(q);
+      return p.title.toLowerCase().includes(q) || p.description.toLowerCase().includes(q) || (p.run_id ? p.run_id.toLowerCase().includes(q) : false);
     }
     return true;
   });
@@ -308,7 +308,9 @@ export function ProjectsPage() {
             {/* Project Cards Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               {filteredProjects.map(project => {
-                const percent = Math.round((project.milestones_completed / project.milestones_total) * 100);
+                const completed = project.milestones_completed ?? 0;
+                const total = project.milestones_total ?? (project.milestones?.length || 1);
+                const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
                 return (
                   <div 
                     key={project.id}

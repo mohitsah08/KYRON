@@ -6,8 +6,55 @@ import crypto from 'node:crypto';
 
 const router = Router();
 
+// Accounts are created and signed in through Supabase Auth. These password endpoints only
+// back the automated test suite (and local setups that opt in), never production traffic.
+function legacyAuthEnabled(): boolean {
+  return process.env.TEST_MODE === 'true' || process.env.NODE_ENV === 'test' || process.env.ALLOW_LEGACY_AUTH === 'true';
+}
+
+function rejectLegacyAuth(res: Response): boolean {
+  if (legacyAuthEnabled()) return false;
+  res.status(410).json({ error: 'Password sign-in moved to Supabase Auth. Please use the KYRON sign-in page.' });
+  return true;
+}
+
+const USERNAME_RE = /^[a-z0-9_]{3,24}$/;
+
+function isAllowedAvatarUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:') return false;
+    const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || 'https://slkmbmixdqczcjmmnnhc.supabase.co';
+    return url.origin === new URL(supabaseUrl).origin && url.pathname.startsWith('/storage/v1/object/public/avatars/');
+  } catch {
+    return false;
+  }
+}
+
+// Returns a validation message, or null when the update payload is acceptable.
+export function validateProfileUpdate(body: Record<string, unknown>): string | null {
+  const { display_name, full_name, bio, avatar_url, username } = body;
+  for (const [key, value] of Object.entries({ display_name, full_name, bio, avatar_url, username })) {
+    if (value !== undefined && value !== null && typeof value !== 'string') return `${key} must be a string.`;
+  }
+  const name = (full_name ?? display_name) as string | undefined;
+  if (name !== undefined && name !== null) {
+    const trimmed = name.trim();
+    if (trimmed.length < 2 || trimmed.length > 80) return 'Name must be between 2 and 80 characters.';
+  }
+  if (typeof username === 'string' && !USERNAME_RE.test(username)) {
+    return 'Username must be 3–24 lowercase letters, numbers, or underscores.';
+  }
+  if (typeof bio === 'string' && bio.length > 500) return 'Bio must be 500 characters or fewer.';
+  if (typeof avatar_url === 'string' && avatar_url !== '' && !isAllowedAvatarUrl(avatar_url)) {
+    return 'Avatar must be uploaded through KYRON.';
+  }
+  return null;
+}
+
 // Register new account
 router.post('/register', async (req: Request, res: Response) => {
+  if (rejectLegacyAuth(res)) return;
   try {
     const { email, password, display_name } = req.body;
 
@@ -54,6 +101,7 @@ router.post('/register', async (req: Request, res: Response) => {
 
 // Login
 router.post('/login', async (req: Request, res: Response) => {
+  if (rejectLegacyAuth(res)) return;
   try {
     const { email, password } = req.body;
 
@@ -104,7 +152,10 @@ router.post('/login', async (req: Request, res: Response) => {
 router.get('/me', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user!.id;
-    const profile = await db.get(`SELECT id, email, display_name, username, bio, avatar_url, credit_balance, is_unlimited_credit_user, created_at FROM profiles WHERE id = ?`, [userId]) as any;
+    const profile = await db.get(
+      `SELECT id, email, display_name, full_name, username, bio, avatar_url, role, credit_balance, is_unlimited_credit_user, created_at, updated_at FROM profiles WHERE id = ?`,
+      [userId]
+    ) as any;
 
     if (!profile) {
       res.status(404).json({ error: 'User not found' });
@@ -121,6 +172,72 @@ router.get('/me', requireAuth, async (req: AuthRequest, res: Response) => {
   } catch (err: any) {
     console.error('Profile fetch error:', err.message);
     res.status(500).json({ error: 'An unexpected error occurred while fetching user profile.' });
+  }
+});
+
+// Update Current User Profile
+router.put('/me', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user!.id;
+    const invalid = validateProfileUpdate(req.body || {});
+    if (invalid) {
+      res.status(400).json({ error: invalid });
+      return;
+    }
+    const { display_name, full_name, bio, avatar_url, username } = req.body;
+
+    const existing = await db.get(`SELECT id FROM profiles WHERE id = ?`, [userId]);
+    if (!existing) {
+      res.status(404).json({ error: 'Profile not found' });
+      return;
+    }
+
+    if (username) {
+      const existingUsername = await db.get(
+        `SELECT id FROM profiles WHERE username = ? AND id != ?`,
+        [username, userId]
+      );
+      if (existingUsername) {
+        res.status(409).json({ error: 'Username is already taken.' });
+        return;
+      }
+    }
+
+    const rawName = full_name || display_name;
+    const updatedName = typeof rawName === 'string' ? rawName.trim() : rawName;
+    const now = new Date().toISOString();
+
+    await db.run(
+      `UPDATE profiles
+       SET display_name = COALESCE(?, display_name),
+           full_name = COALESCE(?, full_name),
+           bio = COALESCE(?, bio),
+           avatar_url = COALESCE(?, avatar_url),
+           username = COALESCE(?, username),
+           updated_at = ?
+       WHERE id = ?`,
+      [updatedName, updatedName, bio, avatar_url, username, now, userId]
+    );
+
+    const updated = await db.get(
+      `SELECT id, email, display_name, full_name, username, bio, avatar_url, role, credit_balance, is_unlimited_credit_user, created_at, updated_at FROM profiles WHERE id = ?`,
+      [userId]
+    ) as any;
+
+    res.json({
+      user: {
+        ...updated,
+        credit_balance: Number(updated.credit_balance),
+        is_unlimited_credit_user: updated.is_unlimited_credit_user === 1
+      }
+    });
+  } catch (err: any) {
+    if (err?.code === '23505' || /UNIQUE constraint failed: profiles\.username/i.test(err?.message || '')) {
+      res.status(409).json({ error: 'Username is already taken.' });
+      return;
+    }
+    console.error('Profile update error:', err.message);
+    res.status(500).json({ error: 'An unexpected error occurred while updating profile.' });
   }
 });
 

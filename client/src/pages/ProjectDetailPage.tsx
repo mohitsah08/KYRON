@@ -70,7 +70,8 @@ export function ProjectDetailPage() {
     }
   ]);
 
-  const copyHash = (hash: string, id: string) => {
+  const copyHash = (hash: string | undefined, id: string) => {
+    if (!hash) return;
     navigator.clipboard.writeText(hash);
     setCopiedHash(id);
     setTimeout(() => setCopiedHash(null), 2000);

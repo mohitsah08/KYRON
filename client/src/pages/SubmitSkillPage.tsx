@@ -1,608 +1,811 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from '../context/RouterContext.tsx';
 import { useAuth } from '../context/AuthContext.tsx';
-import { SideNav } from '../components/SideNav.tsx';
+import { loginPathFor } from '../utils/authHelpers.ts';
 import { api } from '../utils/api.ts';
+import {
+  FileText,
+  Upload,
+  CheckCircle2,
+  AlertTriangle,
+  FolderArchive,
+  Code,
+  Eye,
+  Plus,
+  Trash2,
+  ArrowLeft,
+  Sparkles,
+  ShieldCheck,
+  FileCheck,
+  Layers,
+  Save,
+  Send
+} from 'lucide-react';
+
+interface SupportingFile {
+  path: string;
+  name?: string;
+  content: string;
+}
 
 export function SubmitSkillPage() {
-  const { navigate } = useRouter();
+  const { path, navigate } = useRouter();
   const { user } = useAuth();
 
-  const [currentStep, setCurrentStep] = useState<number>(1);
-  const [publishing, setPublishing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // Mode: 'scratch' | 'upload'
+  const [mode, setMode] = useState<'scratch' | 'upload'>('scratch');
+  const [editorTab, setEditorTab] = useState<'edit' | 'preview'>('edit');
 
-  // Step 1: Basics
+  // Skill metadata
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
+  const [description, setDescription] = useState('');
   const [category, setCategory] = useState('Code Intelligence');
-  const [summary, setSummary] = useState('');
-  const [tags, setTags] = useState('ast, refactor, typescript');
+  const [version, setVersion] = useState('1.0.0');
+  const [license, setLicense] = useState('MIT');
+  const [tags, setTags] = useState('agent, workflow, automation');
+  const [compatibility, setCompatibility] = useState('Claude Code, Cursor, OpenAI Codex, Antigravity');
+  const [pricingType, setPricingType] = useState<'free' | 'paid'>('free');
+  const [price, setPrice] = useState('4.99');
 
-  // Step 2: Protocol
-  const [protocol, setProtocol] = useState<'stdio' | 'sse' | 'rest'>('stdio');
-  const [packageName, setPackageName] = useState('@kyron/my-skill-mcp');
-  const [command, setCommand] = useState('npx');
-  const [args, setArgs] = useState('-y @kyron/my-skill-mcp');
+  // Instructions & files
+  const [instructions, setInstructions] = useState(
+    `# Skill Overview\nProvide a clear explanation of what this skill enables for the AI agent.\n\n## Capabilities\n- Inspects project structure\n- Automates key development workflows\n\n## Usage Instructions\nWhen the user requests this workflow, follow the guidelines below...`
+  );
+  const [supportingFiles, setSupportingFiles] = useState<SupportingFile[]>([]);
+  const [newFilePath, setNewFilePath] = useState('');
+  const [newFileContent, setNewFileContent] = useState('');
+  const [showAddFileModal, setShowAddFileModal] = useState(false);
 
-  // Step 3: Safety & Permissions
-  const [permFs, setPermFs] = useState(true);
-  const [permNet, setPermNet] = useState(false);
-  const [permShell, setPermShell] = useState(false);
-  const [isolationTier, setIsolationTier] = useState<'tier0' | 'tier1'>('tier0');
+  // Upload state
+  const [uploadLoading, setUploadLoading] = useState(false);
+  const [validationResult, setValidationResult] = useState<{
+    valid: boolean;
+    converted?: boolean;
+    extracted_frontmatter?: any;
+    extracted_instructions?: string;
+    files_count?: number;
+    files?: Array<{ name: string; content: string }> | string[];
+    errors?: string[];
+    warnings: string[];
+    security_scan?: any;
+  } | null>(null);
 
-  // Step 4: Testing & Output
-  const [sampleInput, setSampleInput] = useState('{\n  "action": "refactor_ast",\n  "file": "src/walker.rs"\n}');
-  const [sampleOutput, setSampleOutput] = useState('{\n  "status": "success",\n  "cycles_removed": 4,\n  "heap_reduction": "94.2%"\n}');
-  const [astTestPassed, setAstTestPassed] = useState(false);
-  const [astTesting, setAstTesting] = useState(false);
+  // Submission state
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  // Step 5: Review & Submit
-  const [pricingType, setPricingType] = useState<'free' | 'paid'>('paid');
-  const [price, setPrice] = useState('0.0024');
-  const [license, setLicense] = useState('Apache-2.0');
-
+  // Handle slug generation from name
   const handleNameChange = (val: string) => {
     setName(val);
+    const generated = val.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
     if (!slug || slug === name.toLowerCase().replace(/[^a-z0-9]+/g, '-')) {
-      setSlug(val.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''));
+      setSlug(generated);
     }
   };
 
-  const handleRunAstTest = () => {
-    setAstTesting(true);
-    setTimeout(() => {
-      setAstTesting(false);
-      setAstTestPassed(true);
-    }, 800);
+  // Upload handler for ZIP, SKILL.md, or plain .md
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setError(null);
+    setUploadLoading(true);
+    setValidationResult(null);
+
+    try {
+      const isZip = file.name.endsWith('.zip');
+      const isSkillMd = file.name.toLowerCase() === 'skill.md';
+      const isMd = file.name.endsWith('.md') || file.name.endsWith('.markdown') || file.name.endsWith('.txt');
+
+      if (!isZip && !isMd) {
+        throw new Error('Please upload a .zip archive, SKILL.md, or .md markdown file.');
+      }
+
+      if (isZip) {
+        const base64 = await readFileAsBase64(file);
+        const res = await api.validatePackage({
+          type: 'zip',
+          base64
+        });
+        setValidationResult(res);
+
+        if (res.extracted_frontmatter) {
+          if (res.extracted_frontmatter.name) {
+            setName(res.extracted_frontmatter.name);
+            setSlug(res.extracted_frontmatter.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'));
+          }
+          if (res.extracted_frontmatter.description) setDescription(res.extracted_frontmatter.description);
+          if (res.extracted_frontmatter.version) setVersion(res.extracted_frontmatter.version);
+          if (res.extracted_frontmatter.license) setLicense(res.extracted_frontmatter.license);
+          if (res.extracted_frontmatter.compatibility) setCompatibility(res.extracted_frontmatter.compatibility);
+        }
+        if (res.extracted_instructions) {
+          setInstructions(res.extracted_instructions);
+        }
+      } else {
+        const text = await readFileAsText(file);
+        const res = await api.validatePackage({
+          type: isSkillMd ? 'skill_md' : 'plain_md',
+          content: text,
+          filename: file.name
+        });
+        setValidationResult(res);
+
+        if (res.extracted_frontmatter) {
+          if (res.extracted_frontmatter.name) {
+            setName(res.extracted_frontmatter.name);
+            setSlug(res.extracted_frontmatter.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'));
+          }
+          if (res.extracted_frontmatter.description) setDescription(res.extracted_frontmatter.description);
+          if (res.extracted_frontmatter.version) setVersion(res.extracted_frontmatter.version);
+        }
+        if (res.extracted_instructions) {
+          setInstructions(res.extracted_instructions);
+        }
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to inspect uploaded package');
+    } finally {
+      setUploadLoading(false);
+    }
   };
 
-  const handleFinalSubmit = async () => {
-    if (!user) {
-      navigate('/auth');
+  const readFileAsBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        const base64 = result.includes(',') ? result.split(',')[1] : result;
+        resolve(base64);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const readFileAsText = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsText(file);
+    });
+  };
+
+  const handleAddSupportingFile = () => {
+    if (!newFilePath.trim()) return;
+    const cleanPath = newFilePath.trim().replace(/^\/+/, '');
+    if (supportingFiles.some(f => f.path === cleanPath)) {
+      setError(`File ${cleanPath} already exists in supporting resources.`);
       return;
     }
-    setPublishing(true);
+    setSupportingFiles([...supportingFiles, { path: cleanPath, content: newFileContent }]);
+    setNewFilePath('');
+    setNewFileContent('');
+    setShowAddFileModal(false);
+  };
+
+  const handleRemoveSupportingFile = (index: number) => {
+    setSupportingFiles(supportingFiles.filter((_, i) => i !== index));
+  };
+
+  const handleSave = async (isDraft: boolean) => {
+    if (!user) {
+      navigate(loginPathFor(window.location.pathname));
+      return;
+    }
+
+    if (!name.trim()) {
+      setError('Skill Name is required.');
+      return;
+    }
+    if (!description.trim()) {
+      setError('Skill Description is required.');
+      return;
+    }
+    if (!instructions.trim()) {
+      setError('Markdown instructions are required.');
+      return;
+    }
+
+    setSubmitting(true);
     setError(null);
+    setSuccessMessage(null);
+
     try {
-      const parsedTags = tags.split(',').map(t => t.trim()).filter(Boolean);
-      await api.publishSkill({
-        name: name || 'Untitled Skill',
-        slug: slug || `skill-${Date.now()}`,
-        summary: summary || 'Autonomous high-performance agent skill',
-        description: summary || 'High-performance MCP runtime binding for autonomous agent loops.',
+      const parsedTags = tags
+        .split(',')
+        .map(t => t.trim())
+        .filter(Boolean);
+
+      const payload = {
+        name: name.trim(),
+        slug: slug.trim() || name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+        summary: description.trim(),
+        description: description.trim(),
         category,
+        version: version.trim() || '1.0.0',
+        license: license.trim() || 'MIT',
+        compatibility: compatibility.trim() || undefined,
+        compatibility_type: compatibility.trim() || undefined,
         tags: parsedTags,
         pricing_type: pricingType,
-        price: pricingType === 'paid' ? parseFloat(price) || 0.0024 : 0,
-        skill_md_content: `---\nname: ${slug}\nversion: 1.0.0\nprotocol: ${protocol}\n---\n\n# Sample Input\n\`\`\`json\n${sampleInput}\n\`\`\`\n\n# Sample Output\n\`\`\`json\n${sampleOutput}\n\`\`\``
-      });
-      navigate('/creator');
+        price: pricingType === 'paid' ? parseFloat(price) || 0 : 0,
+        instructions: instructions.trim(),
+        skill_md_content: instructions.trim(),
+        supporting_files: supportingFiles,
+        files: supportingFiles,
+        is_draft: isDraft
+      };
+
+      const res = await api.publishSkill(payload);
+      setSuccessMessage(
+        isDraft
+          ? 'Draft saved successfully! You can find it in your Creator Studio.'
+          : 'Skill published to Marketplace successfully!'
+      );
+      setTimeout(() => {
+        navigate('/creator');
+      }, 1200);
     } catch (err: any) {
-      setError(err.message || 'Submission failed');
+      setError(err.message || 'Failed to save skill.');
     } finally {
-      setPublishing(false);
+      setSubmitting(false);
     }
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-bg-canvas text-text-primary antialiased font-body-md">
-      <div className="flex flex-col lg:flex-row flex-1 w-full max-w-[1440px] mx-auto">
-        <SideNav activeTab="creator" />
+    <div className="min-h-screen bg-[#FAFAF9] text-[#171717] py-8 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-5xl mx-auto">
+        {/* Navigation / Header */}
+        <div className="flex items-center justify-between mb-6 pb-4 border-b border-[#E8E8E6]">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => navigate('/creator')}
+              className="p-1.5 rounded-lg border border-[#E8E8E6] bg-white text-[#737373] hover:text-[#171717] hover:border-[#D4D4D0] transition-colors"
+              title="Back to Creator Studio"
+            >
+              <ArrowLeft className="w-4 h-4" />
+            </button>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-mono font-medium text-[#F97316] uppercase tracking-wider">
+                  Creator Studio
+                </span>
+                <span className="text-[#A3A3A3]">/</span>
+                <span className="text-xs font-mono text-[#737373]">Skill Editor</span>
+              </div>
+              <h1 className="text-2xl font-bold tracking-tight text-[#171717] mt-0.5">
+                Create & Publish AI Skill
+              </h1>
+            </div>
+          </div>
 
-        <div className="flex-1 min-w-0 flex flex-col min-h-screen">
-          <main className="flex-1 pb-24 px-6 md:px-10 py-8">
-            <div className="max-w-[1080px] mx-auto">
-              
-              {/* Header Monograph */}
-              <div className="border-b border-border-subtle pb-6 mb-8">
-                <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-                  <div>
-                    <div className="inline-flex items-center gap-2 px-2 py-0.5 bg-bg-surface border border-border-subtle rounded text-label-sm font-label-sm text-text-secondary mb-3 uppercase tracking-wider">
-                      <span className="w-1.5 h-1.5 rounded-full bg-primary-container"></span>
-                      CREATOR TOOLING & INFRASTRUCTURE
-                    </div>
-                    <h1 className="text-headline-lg font-headline-lg text-text-primary font-semibold tracking-tight">
-                      Publish an Autonomous Skill
-                    </h1>
-                    <p className="text-body-md font-body-md text-text-secondary mt-1.5 max-w-2xl">
-                      Register an MCP server, autonomous agent, or tool model with verified runtime sandboxing.
-                    </p>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => handleSave(true)}
+              disabled={submitting}
+              className="px-4 py-2 rounded-lg border border-[#E8E8E6] bg-white text-sm font-medium text-[#171717] hover:bg-[#F5F5F4] transition-colors flex items-center gap-2 disabled:opacity-50"
+            >
+              <Save className="w-4 h-4 text-[#737373]" />
+              <span>Save Draft</span>
+            </button>
+            <button
+              onClick={() => handleSave(false)}
+              disabled={submitting}
+              className="px-4 py-2 rounded-lg bg-[#F97316] hover:bg-[#EA580C] text-white text-sm font-semibold transition-colors flex items-center gap-2 shadow-sm disabled:opacity-50"
+            >
+              <Send className="w-4 h-4" />
+              <span>{submitting ? 'Publishing...' : 'Publish to Marketplace'}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Alerts */}
+        {error && (
+          <div className="mb-6 p-4 rounded-xl border border-red-200 bg-red-50 text-red-800 text-sm flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+            <div>
+              <div className="font-semibold">Action failed</div>
+              <div>{error}</div>
+            </div>
+          </div>
+        )}
+        {successMessage && (
+          <div className="mb-6 p-4 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-800 text-sm flex items-start gap-3">
+            <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+            <div className="font-medium">{successMessage}</div>
+          </div>
+        )}
+
+        {/* Mode Selector */}
+        <div className="flex gap-2 p-1 bg-[#EDEDEB] rounded-xl w-fit mb-6">
+          <button
+            onClick={() => setMode('scratch')}
+            className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
+              mode === 'scratch'
+                ? 'bg-white text-[#171717] shadow-xs'
+                : 'text-[#737373] hover:text-[#171717]'
+            }`}
+          >
+            <FileText className="w-4 h-4" />
+            <span>Create from Scratch</span>
+          </button>
+          <button
+            onClick={() => setMode('upload')}
+            className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
+              mode === 'upload'
+                ? 'bg-white text-[#171717] shadow-xs'
+                : 'text-[#737373] hover:text-[#171717]'
+            }`}
+          >
+            <Upload className="w-4 h-4" />
+            <span>Upload Existing Skill (ZIP / SKILL.md / MD)</span>
+          </button>
+        </div>
+
+        {/* Upload Mode Card */}
+        {mode === 'upload' && (
+          <div className="mb-8 p-6 bg-white rounded-xl border border-[#E8E8E6] shadow-xs">
+            <h2 className="text-base font-semibold text-[#171717] mb-1 flex items-center gap-2">
+              <FolderArchive className="w-5 h-5 text-[#F97316]" />
+              <span>Import Skill Archive or Document</span>
+            </h2>
+            <p className="text-xs text-[#737373] mb-4">
+              Upload an Agent Skills ZIP package, a standalone <code className="font-mono bg-[#F5F5F4] px-1 py-0.5 rounded text-[#171717]">SKILL.md</code>, or a plain Markdown guide. Plain markdown files will be automatically structured into an Agent Skill with valid YAML frontmatter.
+            </p>
+
+            <label className="border-2 border-dashed border-[#D4D4D0] hover:border-[#F97316] rounded-xl p-8 flex flex-col items-center justify-center cursor-pointer bg-[#FAFAF9] transition-colors">
+              <input
+                type="file"
+                accept=".zip,.md,.markdown,.txt"
+                onChange={handleFileUpload}
+                disabled={uploadLoading}
+                className="hidden"
+              />
+              <Upload className="w-8 h-8 text-[#A3A3A3] mb-2" />
+              <span className="text-sm font-semibold text-[#171717]">
+                {uploadLoading ? 'Validating package...' : 'Click to select ZIP archive or Markdown file'}
+              </span>
+              <span className="text-xs text-[#737373] mt-1">
+                Supports .zip (max 25MB), SKILL.md, or .md documents
+              </span>
+            </label>
+
+            {/* Validation & Security Report */}
+            {validationResult && (
+              <div className="mt-6 border border-[#E8E8E6] rounded-xl p-5 bg-[#FAFAF9]">
+                <div className="flex items-center justify-between mb-3 pb-2 border-b border-[#E8E8E6]">
+                  <div className="flex items-center gap-2">
+                    {validationResult.valid ? (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        Package Validated
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-800">
+                        <AlertTriangle className="w-3.5 h-3.5" />
+                        Validation Issues Detected
+                      </span>
+                    )}
+                    {validationResult.converted && (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                        <Sparkles className="w-3.5 h-3.5" />
+                        Plain Markdown converted with YAML frontmatter
+                      </span>
+                    )}
                   </div>
-                  <div className="flex items-center gap-3 text-label-sm font-label-sm text-text-secondary">
-                    <span className="inline-flex items-center gap-1">
-                      <span className="material-symbols-outlined text-[16px] text-status-success">verified</span>
-                      Verified Developer Auth
-                    </span>
-                    <span className="text-border-strong">•</span>
-                    <span>Draft ID: <code className="font-code-sm text-code-sm text-text-primary">sk_99x_ast</code></span>
+                  <span className="text-xs font-mono text-[#737373]">
+                    {validationResult.files_count ?? 1} file(s) inspected
+                  </span>
+                </div>
+
+                {/* Security checks grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 my-3">
+                  <div className="p-2.5 rounded-lg bg-white border border-[#E8E8E6] text-xs">
+                    <div className="text-[#737373] text-[11px] mb-1">Path Traversal</div>
+                    <div className="font-semibold text-emerald-700 flex items-center gap-1">
+                      <ShieldCheck className="w-3.5 h-3.5" /> Protected
+                    </div>
+                  </div>
+                  <div className="p-2.5 rounded-lg bg-white border border-[#E8E8E6] text-xs">
+                    <div className="text-[#737373] text-[11px] mb-1">Primary Skill File</div>
+                    <div className="font-semibold text-emerald-700 flex items-center gap-1">
+                      <FileCheck className="w-3.5 h-3.5" /> Unique SKILL.md
+                    </div>
+                  </div>
+                  <div className="p-2.5 rounded-lg bg-white border border-[#E8E8E6] text-xs">
+                    <div className="text-[#737373] text-[11px] mb-1">Executable Guard</div>
+                    <div className="font-semibold text-emerald-700 flex items-center gap-1">
+                      <ShieldCheck className="w-3.5 h-3.5" /> Safe (Non-exec)
+                    </div>
+                  </div>
+                  <div className="p-2.5 rounded-lg bg-white border border-[#E8E8E6] text-xs">
+                    <div className="text-[#737373] text-[11px] mb-1">Frontmatter Schema</div>
+                    <div className="font-semibold text-emerald-700 flex items-center gap-1">
+                      <CheckCircle2 className="w-3.5 h-3.5" /> Standard Name/Desc
+                    </div>
                   </div>
                 </div>
 
-                {/* 5-Step Progress Bar */}
-                <div className="mt-8 pt-6 border-t border-border-subtle">
-                  <div className="grid grid-cols-2 md:grid-cols-5 gap-3 sm:gap-4">
-                    {/* Step 1 */}
-                    <div className="flex flex-col gap-2 cursor-pointer" onClick={() => setCurrentStep(1)}>
-                      <div className={`h-1.5 w-full rounded-full ${currentStep >= 1 ? 'bg-primary-container' : 'bg-border-subtle'}`}></div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-label-sm font-label-sm font-semibold truncate text-text-primary">1. Basics</span>
-                      </div>
+                {validationResult.files && validationResult.files.length > 0 && (
+                  <div className="mt-3">
+                    <div className="text-xs font-semibold text-[#171717] mb-1.5 flex items-center gap-1.5">
+                      <Layers className="w-3.5 h-3.5 text-[#F97316]" />
+                      <span>Archive Structure ({validationResult.files.length} items)</span>
                     </div>
-                    {/* Step 2 */}
-                    <div className="flex flex-col gap-2 cursor-pointer" onClick={() => setCurrentStep(2)}>
-                      <div className={`h-1.5 w-full rounded-full ${currentStep >= 2 ? 'bg-primary-container' : 'bg-border-subtle'}`}></div>
-                      <div className="flex items-center gap-1.5">
-                        <span className={`text-label-sm font-label-sm font-semibold truncate ${currentStep >= 2 ? 'text-text-primary' : 'text-text-tertiary'}`}>
-                          2. Setup & MCP
-                        </span>
-                      </div>
-                    </div>
-                    {/* Step 3 */}
-                    <div className="flex flex-col gap-2 cursor-pointer" onClick={() => setCurrentStep(3)}>
-                      <div className={`h-1.5 w-full rounded-full ${currentStep >= 3 ? 'bg-primary-container' : 'bg-border-subtle'}`}></div>
-                      <div className="flex items-center gap-1.5">
-                        <span className={`text-label-sm font-label-sm font-semibold truncate ${currentStep >= 3 ? 'text-text-primary' : 'text-text-tertiary'}`}>
-                          3. Safety & Permissions
-                        </span>
-                      </div>
-                    </div>
-                    {/* Step 4 */}
-                    <div className="flex flex-col gap-2 cursor-pointer" onClick={() => setCurrentStep(4)}>
-                      <div className={`h-1.5 w-full rounded-full ${currentStep >= 4 ? 'bg-primary-container' : 'bg-border-subtle'}`}></div>
-                      <div className="flex items-center gap-1.5">
-                        <span className={`text-label-sm font-label-sm font-semibold truncate ${currentStep >= 4 ? 'text-text-primary' : 'text-text-tertiary'}`}>
-                          4. Testing & Output
-                        </span>
-                      </div>
-                    </div>
-                    {/* Step 5 */}
-                    <div className="flex flex-col gap-2 cursor-pointer" onClick={() => setCurrentStep(5)}>
-                      <div className={`h-1.5 w-full rounded-full ${currentStep >= 5 ? 'bg-primary-container' : 'bg-border-subtle'}`}></div>
-                      <div className="flex items-center gap-1.5">
-                        <span className={`text-label-sm font-label-sm font-semibold truncate ${currentStep >= 5 ? 'text-text-primary' : 'text-text-tertiary'}`}>
-                          5. Review & Submit
-                        </span>
-                      </div>
+                    <div className="max-h-36 overflow-y-auto font-mono text-xs p-3 rounded-lg bg-white border border-[#E8E8E6] text-[#525252] space-y-1">
+                      {validationResult.files.map((f, i) => {
+                        const fileName = typeof f === 'string' ? f : (f.name || '');
+                        return (
+                          <div key={i} className="flex items-center gap-2">
+                            <span className="text-[#A3A3A3]">├──</span>
+                            <span className={fileName.toLowerCase().includes('skill.md') ? 'font-bold text-[#F97316]' : ''}>
+                              {fileName}
+                            </span>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Main Editor Form */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Left Column: Metadata & Config */}
+          <div className="lg:col-span-1 space-y-5">
+            <div className="bg-white rounded-xl border border-[#E8E8E6] p-5 shadow-xs space-y-4">
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-[#737373] pb-2 border-b border-[#E8E8E6]">
+                General Metadata
+              </h2>
+
+              <div>
+                <label className="block text-xs font-medium text-[#171717] mb-1">
+                  Skill Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => handleNameChange(e.target.value)}
+                  placeholder="e.g. NextJS Architecture Reviewer"
+                  className="w-full px-3 py-2 text-sm rounded-lg border border-[#E8E8E6] focus:outline-none focus:ring-2 focus:ring-[#F97316]/30 focus:border-[#F97316]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-[#171717] mb-1">
+                  Slug (URL Identifier)
+                </label>
+                <input
+                  type="text"
+                  value={slug}
+                  onChange={(e) => setSlug(e.target.value)}
+                  placeholder="nextjs-architecture-reviewer"
+                  className="w-full px-3 py-2 text-sm font-mono rounded-lg border border-[#E8E8E6] bg-[#FAFAF9] text-[#525252] focus:outline-none focus:ring-2 focus:ring-[#F97316]/30 focus:border-[#F97316]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-[#171717] mb-1">
+                  Description / Summary <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  rows={3}
+                  placeholder="Comprehensive evaluation checklist for Next.js App Router projects..."
+                  className="w-full px-3 py-2 text-sm rounded-lg border border-[#E8E8E6] focus:outline-none focus:ring-2 focus:ring-[#F97316]/30 focus:border-[#F97316]"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-[#171717] mb-1">
+                    Category
+                  </label>
+                  <select
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value)}
+                    className="w-full px-3 py-2 text-sm rounded-lg border border-[#E8E8E6] focus:outline-none focus:ring-2 focus:ring-[#F97316]/30 focus:border-[#F97316]"
+                  >
+                    <option>Code Intelligence</option>
+                    <option>DevOps & CI/CD</option>
+                    <option>Architecture & Design</option>
+                    <option>Security & Auditing</option>
+                    <option>Data Engineering</option>
+                    <option>Testing & QA</option>
+                    <option>Documentation</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-[#171717] mb-1">
+                    Version
+                  </label>
+                  <input
+                    type="text"
+                    value={version}
+                    onChange={(e) => setVersion(e.target.value)}
+                    placeholder="1.0.0"
+                    className="w-full px-3 py-2 text-sm font-mono rounded-lg border border-[#E8E8E6] focus:outline-none focus:ring-2 focus:ring-[#F97316]/30 focus:border-[#F97316]"
+                  />
                 </div>
               </div>
 
-              {/* Prototype Mode Notice */}
-              <div className="mb-8 p-3.5 bg-bg-surface border border-border-subtle rounded-xl flex items-start sm:items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <span className="material-symbols-outlined text-primary-container text-[20px]">shield_lock</span>
-                  <div className="text-body-sm font-body-sm text-text-secondary">
-                    <strong className="font-medium text-text-primary">Prototype Sandboxing:</strong> All skill packages undergo an automated 8-point AST security analysis prior to inclusion in the global index.
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-[#171717] mb-1">
+                    License
+                  </label>
+                  <input
+                    type="text"
+                    value={license}
+                    onChange={(e) => setLicense(e.target.value)}
+                    placeholder="MIT"
+                    className="w-full px-3 py-2 text-sm rounded-lg border border-[#E8E8E6] focus:outline-none focus:ring-2 focus:ring-[#F97316]/30 focus:border-[#F97316]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-[#171717] mb-1">
+                    Pricing
+                  </label>
+                  <select
+                    value={pricingType}
+                    onChange={(e) => setPricingType(e.target.value as 'free' | 'paid')}
+                    className="w-full px-3 py-2 text-sm rounded-lg border border-[#E8E8E6] focus:outline-none focus:ring-2 focus:ring-[#F97316]/30 focus:border-[#F97316]"
+                  >
+                    <option value="free">Free</option>
+                    <option value="paid">Paid</option>
+                  </select>
+                </div>
+              </div>
+
+              {pricingType === 'paid' && (
+                <div>
+                  <label className="block text-xs font-medium text-[#171717] mb-1">
+                    Price (USD / Credits)
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-2 text-sm text-[#737373]">$</span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0.50"
+                      value={price}
+                      onChange={(e) => setPrice(e.target.value)}
+                      className="w-full pl-7 pr-3 py-2 text-sm font-mono rounded-lg border border-[#E8E8E6] focus:outline-none focus:ring-2 focus:ring-[#F97316]/30 focus:border-[#F97316]"
+                    />
                   </div>
                 </div>
-                <div className="shrink-0 hidden sm:block">
-                  <span className="text-code-sm font-code-sm text-text-tertiary bg-bg-canvas px-2 py-1 rounded border border-border-subtle">
-                    AST-GUARD: ACTIVE
+              )}
+
+              <div>
+                <label className="block text-xs font-medium text-[#171717] mb-1">
+                  Tags (comma-separated)
+                </label>
+                <input
+                  type="text"
+                  value={tags}
+                  onChange={(e) => setTags(e.target.value)}
+                  placeholder="nextjs, react, security"
+                  className="w-full px-3 py-2 text-sm rounded-lg border border-[#E8E8E6] focus:outline-none focus:ring-2 focus:ring-[#F97316]/30 focus:border-[#F97316]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-[#171717] mb-1">
+                  Agent Compatibility
+                </label>
+                <input
+                  type="text"
+                  value={compatibility}
+                  onChange={(e) => setCompatibility(e.target.value)}
+                  placeholder="Claude Code, Cursor, Codex, Antigravity"
+                  className="w-full px-3 py-2 text-sm rounded-lg border border-[#E8E8E6] focus:outline-none focus:ring-2 focus:ring-[#F97316]/30 focus:border-[#F97316]"
+                />
+              </div>
+            </div>
+
+            {/* Supporting Resources Section */}
+            <div className="bg-white rounded-xl border border-[#E8E8E6] p-5 shadow-xs space-y-3">
+              <div className="flex items-center justify-between pb-2 border-b border-[#E8E8E6]">
+                <div>
+                  <h2 className="text-xs font-semibold uppercase tracking-wider text-[#737373]">
+                    Supporting Resources
+                  </h2>
+                  <p className="text-[11px] text-[#A3A3A3]">
+                    guides, scripts, templates inside ZIP
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowAddFileModal(true)}
+                  className="px-2.5 py-1 text-xs rounded-lg border border-[#E8E8E6] hover:border-[#D4D4D0] bg-[#FAFAF9] text-[#171717] font-medium flex items-center gap-1"
+                >
+                  <Plus className="w-3.5 h-3.5 text-[#F97316]" />
+                  <span>Add File</span>
+                </button>
+              </div>
+
+              {supportingFiles.length === 0 ? (
+                <div className="text-xs text-[#737373] py-2 text-center">
+                  No extra files added. (Package will include primary SKILL.md)
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {supportingFiles.map((file, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center justify-between p-2 rounded-lg bg-[#FAFAF9] border border-[#E8E8E6] text-xs font-mono"
+                    >
+                      <span className="truncate max-w-[200px] text-[#171717]">{file.path}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveSupportingFile(idx)}
+                        className="text-red-500 hover:text-red-700 p-1"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Right Column: Markdown Editor & Preview */}
+          <div className="lg:col-span-2">
+            <div className="bg-white rounded-xl border border-[#E8E8E6] shadow-xs flex flex-col h-full min-h-[600px]">
+              {/* Editor Tabs */}
+              <div className="flex items-center justify-between px-5 py-3 border-b border-[#E8E8E6]">
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setEditorTab('edit')}
+                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-colors ${
+                      editorTab === 'edit'
+                        ? 'bg-[#FFF4EB] text-[#F97316]'
+                        : 'text-[#737373] hover:text-[#171717]'
+                    }`}
+                  >
+                    <Code className="w-3.5 h-3.5" />
+                    <span>SKILL.md Editor</span>
+                  </button>
+                  <button
+                    onClick={() => setEditorTab('preview')}
+                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-colors ${
+                      editorTab === 'preview'
+                        ? 'bg-[#FFF4EB] text-[#F97316]'
+                        : 'text-[#737373] hover:text-[#171717]'
+                    }`}
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                    <span>Rendered Preview</span>
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-mono text-[#737373] bg-[#FAFAF9] px-2 py-0.5 rounded border border-[#E8E8E6]">
+                    Format: Agent Skills Open Spec
                   </span>
                 </div>
               </div>
 
-              {error && (
-                <div className="mb-6 p-4 rounded-xl bg-status-error/10 border border-status-error/20 text-status-error text-body-sm">
-                  {error}
-                </div>
-              )}
-
-              {/* STEP 1: BASICS */}
-              {currentStep === 1 && (
-                <div className="bg-bg-canvas border border-border-subtle rounded-xl p-6 space-y-6">
-                  <h3 className="font-headline-md font-semibold text-text-primary text-body-lg">
-                    Step 1: Skill Entity Metadata
-                  </h3>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-body-sm font-medium text-text-primary mb-1.5">Skill Display Name</label>
-                      <input 
-                        value={name}
-                        onChange={e => handleNameChange(e.target.value)}
-                        placeholder="e.g. OctoCode Architect"
-                        className="w-full h-10 px-3 bg-bg-surface border border-border-subtle rounded-lg text-body-sm text-text-primary focus:border-text-primary"
-                      />
+              {/* Editor / Preview Area */}
+              <div className="p-5 flex-1 flex flex-col">
+                {editorTab === 'edit' ? (
+                  <div className="flex-1 flex flex-col space-y-3">
+                    <div className="p-3 bg-[#FAFAF9] rounded-lg border border-[#E8E8E6] text-xs font-mono text-[#737373]">
+                      <div className="text-[#A3A3A3] mb-1 font-semibold text-[11px] uppercase">Generated Frontmatter Header:</div>
+                      <div>---</div>
+                      <div>name: {slug || name.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'my-skill'}</div>
+                      <div>description: {description || 'Skill description...'}</div>
+                      <div>version: {version}</div>
+                      <div>license: {license}</div>
+                      <div>---</div>
                     </div>
-                    <div>
-                      <label className="block text-body-sm font-medium text-text-primary mb-1.5">Registry Slug</label>
-                      <input 
-                        value={slug}
-                        onChange={e => setSlug(e.target.value)}
-                        placeholder="e.g. octocode-architect"
-                        className="w-full h-10 px-3 bg-bg-surface border border-border-subtle rounded-lg font-code-sm text-body-sm text-text-primary focus:border-text-primary"
-                      />
-                    </div>
-                  </div>
 
-                  <div>
-                    <label className="block text-body-sm font-medium text-text-primary mb-1.5">Category</label>
-                    <select 
-                      value={category}
-                      onChange={e => setCategory(e.target.value)}
-                      className="w-full h-10 px-3 bg-bg-surface border border-border-subtle rounded-lg text-body-sm text-text-primary"
-                    >
-                      <option>Code Intelligence</option>
-                      <option>Database & Migrations</option>
-                      <option>DevOps & Infra</option>
-                      <option>Security & Compliance</option>
-                      <option>Autonomous Agents</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-body-sm font-medium text-text-primary mb-1.5">Short Summary</label>
-                    <textarea 
-                      value={summary}
-                      onChange={e => setSummary(e.target.value)}
-                      rows={3}
-                      placeholder="High-performance autonomous AST analysis, structural migration synthesis, and linting."
-                      className="w-full p-3 bg-bg-surface border border-border-subtle rounded-lg text-body-sm text-text-primary focus:border-text-primary"
+                    <label className="text-xs font-medium text-[#171717]">
+                      Instruction Content (Markdown):
+                    </label>
+                    <textarea
+                      value={instructions}
+                      onChange={(e) => setInstructions(e.target.value)}
+                      placeholder="# Skill Instructions\n\nExplain precisely how your AI agent should execute this workflow..."
+                      className="w-full flex-1 min-h-[380px] p-4 font-mono text-sm rounded-lg border border-[#E8E8E6] bg-white text-[#171717] focus:outline-none focus:ring-2 focus:ring-[#F97316]/30 focus:border-[#F97316] leading-relaxed resize-y"
                     />
                   </div>
-
-                  <div>
-                    <label className="block text-body-sm font-medium text-text-primary mb-1.5">Keywords & Tags (comma separated)</label>
-                    <input 
-                      value={tags}
-                      onChange={e => setTags(e.target.value)}
-                      placeholder="rust, ast, analysis, refactor"
-                      className="w-full h-10 px-3 bg-bg-surface border border-border-subtle rounded-lg text-body-sm text-text-primary focus:border-text-primary"
-                    />
-                  </div>
-
-                  <div className="flex justify-end pt-4 border-t border-border-subtle">
-                    <button 
-                      onClick={() => setCurrentStep(2)}
-                      className="h-10 px-5 bg-primary-container hover:bg-accent-hover text-white rounded-lg text-body-sm font-medium transition-colors flex items-center gap-2"
-                    >
-                      <span>Continue to Setup & Protocol</span>
-                      <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* STEP 2: SETUP & MCP */}
-              {currentStep === 2 && (
-                <div className="bg-bg-canvas border border-border-subtle rounded-xl p-6 space-y-6">
-                  <h3 className="font-headline-md font-semibold text-text-primary text-body-lg">
-                    Step 2: Runtime Protocol & MCP Architecture
-                  </h3>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div 
-                      onClick={() => setProtocol('stdio')}
-                      className={`p-4 rounded-xl cursor-pointer border-2 transition-all flex flex-col justify-between ${
-                        protocol === 'stdio' 
-                          ? 'border-primary-container bg-accent-tint/30' 
-                          : 'border-border-subtle bg-bg-canvas hover:border-border-strong'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="material-symbols-outlined text-primary-container text-[20px]">terminal</span>
-                        <span className={`w-3.5 h-3.5 rounded-full border-2 ${protocol === 'stdio' ? 'border-primary-container bg-primary-container' : 'border-border-strong'}`}></span>
-                      </div>
-                      <div className="font-headline-md font-medium text-text-primary text-body-sm">MCP Stdio / Native</div>
-                      <p className="text-xs text-text-secondary mt-1">Direct sub-process execution via stdin/stdout pipe.</p>
-                      <span className="text-[11px] font-code-sm text-status-success mt-2">● &lt; 1.2ms latency</span>
+                ) : (
+                  <div className="flex-1 overflow-y-auto prose prose-neutral max-w-none p-4 border border-[#E8E8E6] rounded-lg bg-[#FAFAF9]">
+                    <div className="mb-4 pb-3 border-b border-[#E8E8E6]">
+                      <span className="text-xs font-mono uppercase bg-[#EDEDEB] px-2 py-1 rounded text-[#525252]">
+                        Frontmatter Preview
+                      </span>
+                      <pre className="mt-2 text-xs font-mono bg-white p-3 rounded border border-[#E8E8E6] text-[#171717]">
+{`---
+name: ${slug || 'my-skill'}
+description: ${description || 'Skill description'}
+version: ${version}
+license: ${license}
+---`}
+                      </pre>
                     </div>
 
-                    <div 
-                      onClick={() => setProtocol('sse')}
-                      className={`p-4 rounded-xl cursor-pointer border-2 transition-all flex flex-col justify-between ${
-                        protocol === 'sse' 
-                          ? 'border-primary-container bg-accent-tint/30' 
-                          : 'border-border-subtle bg-bg-canvas hover:border-border-strong'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="material-symbols-outlined text-text-secondary text-[20px]">cloud_sync</span>
-                        <span className={`w-3.5 h-3.5 rounded-full border-2 ${protocol === 'sse' ? 'border-primary-container bg-primary-container' : 'border-border-strong'}`}></span>
-                      </div>
-                      <div className="font-headline-md font-medium text-text-primary text-body-sm">MCP SSE Remote</div>
-                      <p className="text-xs text-text-secondary mt-1">Server-Sent Events tunnel for remote hosts.</p>
-                      <span className="text-[11px] font-code-sm text-text-tertiary mt-2">Stateless streaming</span>
-                    </div>
-
-                    <div 
-                      onClick={() => setProtocol('rest')}
-                      className={`p-4 rounded-xl cursor-pointer border-2 transition-all flex flex-col justify-between ${
-                        protocol === 'rest' 
-                          ? 'border-primary-container bg-accent-tint/30' 
-                          : 'border-border-subtle bg-bg-canvas hover:border-border-strong'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="material-symbols-outlined text-text-secondary text-[20px]">webhook</span>
-                        <span className={`w-3.5 h-3.5 rounded-full border-2 ${protocol === 'rest' ? 'border-primary-container bg-primary-container' : 'border-border-strong'}`}></span>
-                      </div>
-                      <div className="font-headline-md font-medium text-text-primary text-body-sm">REST Webhook</div>
-                      <p className="text-xs text-text-secondary mt-1">Traditional HTTP JSON payload routing.</p>
-                      <span className="text-[11px] font-code-sm text-text-tertiary mt-2">Legacy integration</span>
+                    <div className="whitespace-pre-wrap font-sans text-sm text-[#171717] leading-relaxed">
+                      {instructions}
                     </div>
                   </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-body-sm font-medium text-text-primary mb-1.5">NPM Package / Repository</label>
-                      <input 
-                        value={packageName}
-                        onChange={e => setPackageName(e.target.value)}
-                        className="w-full h-10 px-3 bg-bg-surface border border-border-subtle rounded-lg font-code-sm text-body-sm text-text-primary"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-body-sm font-medium text-text-primary mb-1.5">Executable Command</label>
-                      <input 
-                        value={command}
-                        onChange={e => setCommand(e.target.value)}
-                        className="w-full h-10 px-3 bg-bg-surface border border-border-subtle rounded-lg font-code-sm text-body-sm text-text-primary"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-body-sm font-medium text-text-primary mb-1.5">Default Arguments</label>
-                    <input 
-                      value={args}
-                      onChange={e => setArgs(e.target.value)}
-                      className="w-full h-10 px-3 bg-bg-surface border border-border-subtle rounded-lg font-code-sm text-body-sm text-text-primary"
-                    />
-                  </div>
-
-                  <div className="flex justify-between pt-4 border-t border-border-subtle">
-                    <button 
-                      onClick={() => setCurrentStep(1)}
-                      className="h-10 px-4 bg-bg-surface hover:bg-bg-canvas border border-border-subtle text-text-secondary hover:text-text-primary rounded-lg text-body-sm font-medium"
-                    >
-                      Back
-                    </button>
-                    <button 
-                      onClick={() => setCurrentStep(3)}
-                      className="h-10 px-5 bg-primary-container hover:bg-accent-hover text-white rounded-lg text-body-sm font-medium transition-colors flex items-center gap-2"
-                    >
-                      <span>Continue to Safety</span>
-                      <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* STEP 3: SAFETY & PERMISSIONS */}
-              {currentStep === 3 && (
-                <div className="bg-bg-canvas border border-border-subtle rounded-xl p-6 space-y-6">
-                  <h3 className="font-headline-md font-semibold text-text-primary text-body-lg">
-                    Step 3: Security Sandboxing & Permissions
-                  </h3>
-
-                  <div className="space-y-3">
-                    <label className="flex items-center gap-3 p-3.5 bg-bg-surface border border-border-subtle rounded-lg cursor-pointer">
-                      <input 
-                        type="checkbox"
-                        checked={permFs}
-                        onChange={e => setPermFs(e.target.checked)}
-                        className="w-4 h-4 rounded text-primary-container focus:ring-0"
-                      />
-                      <div>
-                        <div className="text-body-sm font-medium text-text-primary">Workspace Filesystem Access</div>
-                        <div className="text-xs text-text-secondary">Allows reading repository files and producing syntactic code diffs.</div>
-                      </div>
-                    </label>
-
-                    <label className="flex items-center gap-3 p-3.5 bg-bg-surface border border-border-subtle rounded-lg cursor-pointer">
-                      <input 
-                        type="checkbox"
-                        checked={permNet}
-                        onChange={e => setPermNet(e.target.checked)}
-                        className="w-4 h-4 rounded text-primary-container focus:ring-0"
-                      />
-                      <div>
-                        <div className="text-body-sm font-medium text-text-primary">Outbound Network Sockets</div>
-                        <div className="text-xs text-text-secondary">Permits external HTTP requests to verified endpoint APIs.</div>
-                      </div>
-                    </label>
-
-                    <label className="flex items-center gap-3 p-3.5 bg-bg-surface border border-border-subtle rounded-lg cursor-pointer">
-                      <input 
-                        type="checkbox"
-                        checked={permShell}
-                        onChange={e => setPermShell(e.target.checked)}
-                        className="w-4 h-4 rounded text-primary-container focus:ring-0"
-                      />
-                      <div>
-                        <div className="text-body-sm font-medium text-text-primary">Sub-shell Execution</div>
-                        <div className="text-xs text-text-secondary">Requires elevated security tier; runs inside an ephemeral WASM container.</div>
-                      </div>
-                    </label>
-                  </div>
-
-                  <div>
-                    <label className="block text-body-sm font-medium text-text-primary mb-1.5">Isolation Enclave</label>
-                    <select 
-                      value={isolationTier}
-                      onChange={e => setIsolationTier(e.target.value as any)}
-                      className="w-full h-10 px-3 bg-bg-surface border border-border-subtle rounded-lg text-body-sm text-text-primary"
-                    >
-                      <option value="tier0">Tier 0: Pure Hermetic Sandboxing (Zero Data Retention)</option>
-                      <option value="tier1">Tier 1: Read-Only Persistent Cache</option>
-                    </select>
-                  </div>
-
-                  <div className="flex justify-between pt-4 border-t border-border-subtle">
-                    <button 
-                      onClick={() => setCurrentStep(2)}
-                      className="h-10 px-4 bg-bg-surface hover:bg-bg-canvas border border-border-subtle text-text-secondary hover:text-text-primary rounded-lg text-body-sm font-medium"
-                    >
-                      Back
-                    </button>
-                    <button 
-                      onClick={() => setCurrentStep(4)}
-                      className="h-10 px-5 bg-primary-container hover:bg-accent-hover text-white rounded-lg text-body-sm font-medium transition-colors flex items-center gap-2"
-                    >
-                      <span>Continue to Testing</span>
-                      <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* STEP 4: TESTING & OUTPUT */}
-              {currentStep === 4 && (
-                <div className="bg-bg-canvas border border-border-subtle rounded-xl p-6 space-y-6">
-                  <h3 className="font-headline-md font-semibold text-text-primary text-body-lg">
-                    Step 4: Sample I/O & AST Test Validation
-                  </h3>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-body-sm font-medium text-text-primary mb-1.5">Sample Input Payload (JSON)</label>
-                      <textarea 
-                        value={sampleInput}
-                        onChange={e => setSampleInput(e.target.value)}
-                        rows={6}
-                        className="w-full p-3 bg-inverse-surface text-inverse-on-surface rounded-lg font-code-sm text-xs"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-body-sm font-medium text-text-primary mb-1.5">Expected Output Payload (JSON)</label>
-                      <textarea 
-                        value={sampleOutput}
-                        onChange={e => setSampleOutput(e.target.value)}
-                        rows={6}
-                        className="w-full p-3 bg-inverse-surface text-inverse-on-surface rounded-lg font-code-sm text-xs"
-                      />
-                    </div>
-                  </div>
-
-                  {/* AST Scanner Box */}
-                  <div className="p-4 bg-bg-surface border border-border-subtle rounded-xl space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="material-symbols-outlined text-primary-container">fact_check</span>
-                        <span className="font-headline-md font-semibold text-text-primary text-body-sm">
-                          Automated 8-Point AST Static Analysis Test
-                        </span>
-                      </div>
-                      <button 
-                        onClick={handleRunAstTest}
-                        disabled={astTesting}
-                        className="h-8 px-3 bg-bg-canvas border border-border-subtle hover:border-text-primary text-text-primary rounded text-xs font-medium flex items-center gap-1.5"
-                      >
-                        <span className={`material-symbols-outlined text-[15px] ${astTesting ? 'animate-spin' : ''}`}>sync</span>
-                        <span>{astTesting ? 'Scanning AST...' : 'Run AST Verification'}</span>
-                      </button>
-                    </div>
-
-                    {astTestPassed ? (
-                      <div className="p-3 bg-status-success/10 border border-status-success/30 rounded-lg text-xs font-code-sm text-status-success flex items-center gap-2">
-                        <span className="material-symbols-outlined text-[18px]">check_circle</span>
-                        <span>All 8 security checks passed. Zero obfuscation detected. Clean AST syntax.</span>
-                      </div>
-                    ) : (
-                      <p className="text-xs text-text-secondary">
-                        Click "Run AST Verification" to simulate the sandbox security check before final publishing.
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="flex justify-between pt-4 border-t border-border-subtle">
-                    <button 
-                      onClick={() => setCurrentStep(3)}
-                      className="h-10 px-4 bg-bg-surface hover:bg-bg-canvas border border-border-subtle text-text-secondary hover:text-text-primary rounded-lg text-body-sm font-medium"
-                    >
-                      Back
-                    </button>
-                    <button 
-                      onClick={() => setCurrentStep(5)}
-                      className="h-10 px-5 bg-primary-container hover:bg-accent-hover text-white rounded-lg text-body-sm font-medium transition-colors flex items-center gap-2"
-                    >
-                      <span>Continue to Review</span>
-                      <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* STEP 5: REVIEW & SUBMIT */}
-              {currentStep === 5 && (
-                <div className="bg-bg-canvas border border-border-subtle rounded-xl p-6 space-y-6">
-                  <h3 className="font-headline-md font-semibold text-text-primary text-body-lg">
-                    Step 5: Pricing, Licensing & Final Submission
-                  </h3>
-
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                      <label className="block text-body-sm font-medium text-text-primary mb-1.5">Pricing Model</label>
-                      <select 
-                        value={pricingType}
-                        onChange={e => setPricingType(e.target.value as any)}
-                        className="w-full h-10 px-3 bg-bg-surface border border-border-subtle rounded-lg text-body-sm text-text-primary"
-                      >
-                        <option value="paid">Paid (Per Invocation)</option>
-                        <option value="free">Free & Open Source</option>
-                      </select>
-                    </div>
-
-                    {pricingType === 'paid' && (
-                      <div>
-                        <label className="block text-body-sm font-medium text-text-primary mb-1.5">Price (USD / call)</label>
-                        <input 
-                          value={price}
-                          onChange={e => setPrice(e.target.value)}
-                          placeholder="0.0024"
-                          className="w-full h-10 px-3 bg-bg-surface border border-border-subtle rounded-lg font-code-sm text-body-sm text-text-primary"
-                        />
-                      </div>
-                    )}
-
-                    <div>
-                      <label className="block text-body-sm font-medium text-text-primary mb-1.5">License</label>
-                      <select 
-                        value={license}
-                        onChange={e => setLicense(e.target.value)}
-                        className="w-full h-10 px-3 bg-bg-surface border border-border-subtle rounded-lg text-body-sm text-text-primary"
-                      >
-                        <option>Apache-2.0</option>
-                        <option>MIT</option>
-                        <option>Proprietary Enterprise</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* Summary Card */}
-                  <div className="p-4 bg-bg-surface border border-border-subtle rounded-xl space-y-2 text-xs font-code-sm">
-                    <div className="text-text-primary font-semibold text-sm font-sans mb-1">Submission Monograph</div>
-                    <div>Entity: <span className="text-primary-container font-medium">{name || 'OctoCode Architect'}</span> ({slug || 'octocode-architect'})</div>
-                    <div>Protocol: <span className="text-text-primary font-medium">{protocol.toUpperCase()}</span> • Enclave: <span className="text-text-primary font-medium">{isolationTier}</span></div>
-                    <div>70% Revenue Share: <span className="text-status-success font-medium">Active (Direct stripe/token payout)</span></div>
-                  </div>
-
-                  <div className="flex justify-between pt-4 border-t border-border-subtle">
-                    <button 
-                      onClick={() => setCurrentStep(4)}
-                      className="h-10 px-4 bg-bg-surface hover:bg-bg-canvas border border-border-subtle text-text-secondary hover:text-text-primary rounded-lg text-body-sm font-medium"
-                    >
-                      Back
-                    </button>
-                    <button 
-                      onClick={handleFinalSubmit}
-                      disabled={publishing}
-                      className="h-10 px-6 bg-primary-container hover:bg-accent-hover text-white rounded-lg text-body-sm font-medium transition-all shadow-xs flex items-center gap-2 disabled:opacity-50"
-                    >
-                      <span className="material-symbols-outlined text-[18px]">publish</span>
-                      <span>{publishing ? 'Registering with Kyron...' : 'Publish to Kyron Registry'}</span>
-                    </button>
-                  </div>
-                </div>
-              )}
-
+                )}
+              </div>
             </div>
-          </main>
+          </div>
         </div>
+
+        {/* Modal: Add Supporting File */}
+        {showAddFileModal && (
+          <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-white rounded-xl border border-[#E8E8E6] max-w-lg w-full p-6 shadow-xl">
+              <h3 className="text-base font-bold text-[#171717] mb-1">
+                Add Supporting Resource File
+              </h3>
+              <p className="text-xs text-[#737373] mb-4">
+                Include auxiliary guides (e.g. <code className="font-mono">references/guide.md</code>), sample configs, or script templates that package inside the ZIP.
+              </p>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-medium text-[#171717] mb-1">
+                    Relative File Path inside package
+                  </label>
+                  <input
+                    type="text"
+                    value={newFilePath}
+                    onChange={(e) => setNewFilePath(e.target.value)}
+                    placeholder="references/cheatsheet.md"
+                    className="w-full px-3 py-2 text-sm font-mono rounded-lg border border-[#E8E8E6] focus:outline-none focus:ring-2 focus:ring-[#F97316]/30 focus:border-[#F97316]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-[#171717] mb-1">
+                    File Content
+                  </label>
+                  <textarea
+                    value={newFileContent}
+                    onChange={(e) => setNewFileContent(e.target.value)}
+                    rows={6}
+                    placeholder="# Additional Guide\n..."
+                    className="w-full p-3 font-mono text-xs rounded-lg border border-[#E8E8E6] focus:outline-none focus:ring-2 focus:ring-[#F97316]/30 focus:border-[#F97316]"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 mt-6 pt-4 border-t border-[#E8E8E6]">
+                <button
+                  type="button"
+                  onClick={() => setShowAddFileModal(false)}
+                  className="px-4 py-2 text-xs font-medium text-[#737373] hover:text-[#171717] rounded-lg"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleAddSupportingFile}
+                  disabled={!newFilePath.trim()}
+                  className="px-4 py-2 bg-[#F97316] hover:bg-[#EA580C] text-white text-xs font-semibold rounded-lg transition-colors disabled:opacity-50"
+                >
+                  Add File to Package
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

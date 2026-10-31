@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { api } from '../utils/api.ts';
+import React, { useState, useEffect } from 'react';
+import { api, getAuthToken } from '../utils/api.ts';
 
 interface McpServerItem {
   id: string;
@@ -8,124 +8,173 @@ interface McpServerItem {
   maintainer: string;
   rating: number;
   description: string;
-  transport: 'stdio' | 'SSE';
+  transport: 'stdio' | 'SSE' | 'Dual (stdio + SSE)';
   latency: string;
-  callsPerMonth: string;
   status: 'Active' | 'Ready to connect';
-  packageName: string;
+  entrypoint: string;
   defaultConfigKey: string;
+  tools: string[];
 }
 
 export function McpHubPage() {
-  const [selectedClient, setSelectedClient] = useState<'all' | 'claude' | 'cursor' | 'continue' | 'vscode'>('all');
-  const [activeServerId, setActiveServerId] = useState<string>('octocode');
+  const [selectedClient, setSelectedClient] = useState<'all' | 'antigravity' | 'cursor' | 'claude' | 'codex'>('all');
+  const [activeServerId, setActiveServerId] = useState<string>('kyron-gateway');
   const [searchQuery, setSearchQuery] = useState('');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [pingTesting, setPingTesting] = useState(false);
   const [pingResult, setPingResult] = useState<string | null>(null);
+  const [gatewayStatus, setGatewayStatus] = useState<{ online: boolean; latencyMs?: number; version?: string }>({ online: false });
 
   // Playground state
-  const [playgroundOpen, setPlaygroundOpen] = useState(false);
-  const [selectedTool, setSelectedTool] = useState<string>('tools/list');
+  const [playgroundOpen, setPlaygroundOpen] = useState(true);
+  const [selectedTool, setSelectedTool] = useState<string>('ping');
   const [toolParams, setToolParams] = useState<string>('{}');
   const [rpcResponse, setRpcResponse] = useState<any>(null);
   const [rpcLoading, setRpcLoading] = useState(false);
 
-  const mcpEndpointUrl = typeof window !== 'undefined' ? `${window.location.origin}/api/mcp` : 'https://api.kyron.dev/mcp';
+  const originUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
+  const mcpHttpUrl = `${originUrl}/api/mcp`;
+  const mcpSseUrl = `${originUrl}/api/mcp/sse`;
 
   const servers: McpServerItem[] = [
     {
-      id: 'octocode',
-      name: 'kyron/octocode-mcp',
-      version: 'v1.4.2',
-      maintainer: '@axiom_labs',
-      rating: 4.9,
-      description: 'AST refactoring and symbol resolution engine with deterministic tree-sitter bindings for multi-file graph navigation.',
-      transport: 'stdio',
-      latency: '14ms',
-      callsPerMonth: '128.4k',
-      status: 'Active',
-      packageName: '@kyron/octocode-mcp',
-      defaultConfigKey: 'octocode'
-    },
-    {
-      id: 'postgres',
-      name: 'kyron/postgres-introspect',
-      version: 'v0.9.1',
-      maintainer: '@pg_core',
-      rating: 4.8,
-      description: 'Zero-migration schema introspector and relation mapper enabling dynamic schema inference directly into LLM context window.',
-      transport: 'SSE',
-      latency: '28ms',
-      callsPerMonth: '84.1k',
-      status: 'Ready to connect',
-      packageName: '@kyron/postgres-introspect',
-      defaultConfigKey: 'postgres_introspect'
-    },
-    {
-      id: 'git-sentinel',
-      name: 'kyron/git-sentinel-mcp',
-      version: 'v2.0.1',
-      maintainer: '@axiom_labs',
+      id: 'kyron-gateway',
+      name: 'kyron/ai-skill-gateway',
+      version: 'v1.0.0 (MCP 2024-11-05)',
+      maintainer: '@kyron_core',
       rating: 5.0,
-      description: 'Deterministic semantic commit engine and automated staging verification protocol with cryptographic signature assertions.',
-      transport: 'stdio',
-      latency: '8ms',
-      callsPerMonth: '190.2k',
-      status: 'Ready to connect',
-      packageName: '@kyron/git-sentinel-mcp',
-      defaultConfigKey: 'git_sentinel'
+      description: 'Unified AI Agent Skill Gateway MCP Server providing discovery, skill inspection, atomic library installs, and playbook workflow execution.',
+      transport: 'Dual (stdio + SSE)',
+      latency: gatewayStatus.latencyMs ? `${gatewayStatus.latencyMs}ms` : '3ms',
+      status: 'Active',
+      entrypoint: 'server/mcp-stdio.ts',
+      defaultConfigKey: 'kyron',
+      tools: ['ping', 'search_skills', 'get_skill_details', 'install_skill', 'get_my_skills', 'execute_skill_workflow']
     },
     {
-      id: 'browserbase',
-      name: 'kyron/browserbase-headless-mcp',
-      version: 'v1.8.4',
-      maintainer: '@browserbase',
-      rating: 4.9,
-      description: 'Headless Chromium sandboxed browser automation server with DOM snapshotting and stealth session persistence.',
+      id: 'geo-seo-suite',
+      name: 'kyron/geo-seo-suite-mcp',
+      version: 'v1.1.0',
+      maintainer: '@juan_gabriel',
+      rating: 5.0,
+      description: 'AI Search Optimization & Citability Engine. Analyzes visibility across Perplexity, ChatGPT, and Google AI Overviews with 6-dimension scoring.',
       transport: 'SSE',
-      latency: '34ms',
-      callsPerMonth: '210.5k',
+      latency: '6ms',
       status: 'Ready to connect',
-      packageName: '@kyron/browserbase-headless-mcp',
-      defaultConfigKey: 'browserbase'
+      entrypoint: 'server/mcp-stdio.ts',
+      defaultConfigKey: 'kyron_geo_seo',
+      tools: ['execute_skill_workflow (/geo quick, /geo audit)']
+    },
+    {
+      id: 'octocode-architect',
+      name: 'kyron/octocode-ast-mcp',
+      version: 'v2.4.1',
+      maintainer: '@axiom_labs',
+      rating: 4.9,
+      description: 'Autonomous multi-file codebase refactoring, AST analysis, and zero-breakage dependency migration playbooks.',
+      transport: 'stdio',
+      latency: '4ms',
+      status: 'Ready to connect',
+      entrypoint: 'server/mcp-stdio.ts',
+      defaultConfigKey: 'kyron_octocode',
+      tools: ['execute_skill_workflow (/octocode refactor)']
+    },
+    {
+      id: 'code-review-auditor',
+      name: 'kyron/code-review-auditor-mcp',
+      version: 'v1.0.0',
+      maintainer: '@antara_chindarkar',
+      rating: 4.8,
+      description: 'Diff inspector and concurrency race condition auditor providing AST memory allocation and unhandled rejection detection.',
+      transport: 'Dual (stdio + SSE)',
+      latency: '5ms',
+      status: 'Ready to connect',
+      entrypoint: 'server/mcp-stdio.ts',
+      defaultConfigKey: 'kyron_code_review',
+      tools: ['execute_skill_workflow (/review diff)']
     }
   ];
 
   const activeServer = servers.find(s => s.id === activeServerId) || servers[0];
 
+  // Test live connection on component mount
+  useEffect(() => {
+    let mounted = true;
+    const start = performance.now();
+    api.callMcp('ping')
+      .then((res) => {
+        if (!mounted) return;
+        const elapsed = Math.round(performance.now() - start);
+        if (res?.result) {
+          setGatewayStatus({ online: true, latencyMs: Math.max(1, elapsed), version: '1.0.0' });
+        } else {
+          setGatewayStatus({ online: true, latencyMs: Math.max(1, elapsed) });
+        }
+      })
+      .catch(() => {
+        if (mounted) setGatewayStatus({ online: false });
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   const getClientConfigJson = () => {
-    if (selectedClient === 'cursor') {
+    const userToken = getAuthToken() || 'YOUR_OPTIONAL_BEARER_TOKEN';
+
+    if (selectedClient === 'antigravity') {
       return JSON.stringify({
         mcpServers: {
           [activeServer.defaultConfigKey]: {
-            url: `${mcpEndpointUrl}?server=${activeServer.id}`
+            command: "npx",
+            args: ["-y", "tsx", "server/mcp-stdio.ts"],
+            env: {
+              KYRON_AUTH_TOKEN: userToken
+            }
           }
         }
       }, null, 2);
     }
 
-    if (selectedClient === 'continue') {
+    if (selectedClient === 'cursor') {
+      return JSON.stringify({
+        mcpServers: {
+          [activeServer.defaultConfigKey]: {
+            url: mcpSseUrl
+          }
+        }
+      }, null, 2);
+    }
+
+    if (selectedClient === 'codex') {
       return JSON.stringify({
         mcpServers: [
           {
             name: activeServer.defaultConfigKey,
             command: "npx",
-            args: ["-y", activeServer.packageName]
+            args: ["-y", "tsx", "server/mcp-stdio.ts"],
+            env: {
+              KYRON_AUTH_TOKEN: userToken
+            }
           }
         ]
       }, null, 2);
     }
 
-    // Default: Claude Desktop
+    // Default / Claude Desktop
     return JSON.stringify({
       mcpServers: {
         [activeServer.defaultConfigKey]: {
           command: "npx",
           args: [
             "-y",
-            activeServer.packageName
-          ]
+            "tsx",
+            "server/mcp-stdio.ts"
+          ],
+          env: {
+            KYRON_AUTH_TOKEN: userToken
+          }
         }
       }
     }, null, 2);
@@ -143,14 +192,32 @@ export function McpHubPage() {
     triggerToast('Configuration copied to clipboard');
   };
 
-  const testPing = () => {
+  const testPing = async () => {
     setPingTesting(true);
     setPingResult(null);
-    setTimeout(() => {
+    const start = performance.now();
+
+    try {
+      const res = await api.callMcp('tools/call', {
+        name: 'ping',
+        arguments: {}
+      });
+      const elapsed = Math.round(performance.now() - start);
+
+      if (res?.result?.content?.[0]?.text) {
+        setPingResult(`OK: ${elapsed}ms round-trip latency verified via tools/call ping`);
+        setGatewayStatus({ online: true, latencyMs: elapsed });
+        triggerToast(`Live ping test passed (${elapsed}ms)`);
+      } else if (res?.error) {
+        setPingResult(`Error: ${res.error.message} (${res.error.code})`);
+      } else {
+        setPingResult(`OK: ${elapsed}ms latency verified`);
+      }
+    } catch (err: any) {
+      setPingResult(`Connection failed: ${err.message}`);
+    } finally {
       setPingTesting(false);
-      setPingResult('OK: 12ms latency, daemon acknowledged');
-      triggerToast('Local ping test passed (12ms)');
-    }, 600);
+    }
   };
 
   const handleSendRpc = async () => {
@@ -165,7 +232,17 @@ export function McpHubPage() {
         return;
       }
 
-      if (selectedTool === 'tools/list') {
+      if (selectedTool === 'initialize') {
+        const res = await api.callMcp('initialize', {
+          protocolVersion: '2024-11-05',
+          capabilities: {},
+          clientInfo: { name: 'KYRON Playground', version: '1.0.0' }
+        });
+        setRpcResponse(res);
+      } else if (selectedTool === 'ping_method') {
+        const res = await api.callMcp('ping', {});
+        setRpcResponse(res);
+      } else if (selectedTool === 'tools/list') {
         const res = await api.callMcp('tools/list', parsedParams);
         setRpcResponse(res);
       } else {
@@ -215,18 +292,18 @@ export function McpHubPage() {
                 Model Context Protocol (MCP) Hub
               </h1>
               <p className="text-body-md font-body-md text-text-secondary mt-1 max-w-2xl">
-                Direct bridge between client environments (Claude Desktop, Cursor, Continue) and decentralized AI tooling.
+                Direct bridge connecting Antigravity, Cursor, Claude Desktop, and Codex to the live KYRON AI Agent Skill Gateway.
               </p>
             </div>
 
             {/* Local Bridge Status Pill */}
             <div className="flex items-center gap-2.5 px-3 py-2 bg-bg-surface border border-border-subtle rounded-lg self-start md:self-auto shadow-xs">
               <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-status-success opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-status-success"></span>
+                <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${gatewayStatus.online ? 'bg-status-success' : 'bg-status-warning'}`}></span>
+                <span className={`relative inline-flex rounded-full h-2 w-2 ${gatewayStatus.online ? 'bg-status-success' : 'bg-status-warning'}`}></span>
               </span>
               <span className="text-code-sm font-code-sm text-text-secondary">
-                Kyron Daemon v2.1 Local Bridge: <span className="text-text-primary font-medium">Connected (Port 8421)</span>
+                KYRON MCP Gateway: <span className="text-text-primary font-medium">{gatewayStatus.online ? `Online (${gatewayStatus.latencyMs}ms)` : 'Checking Gateway...'}</span>
               </span>
             </div>
           </div>
@@ -244,7 +321,7 @@ export function McpHubPage() {
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 className="w-full h-9 pl-9 pr-4 bg-bg-canvas border border-border-subtle rounded-lg text-body-md font-body-md text-text-primary placeholder:text-text-tertiary focus:border-text-primary focus:outline-none transition-colors" 
-                placeholder="Filter by MCP server, transport (stdio/SSE), or runtime..." 
+                placeholder="Filter by capability, transport (stdio/SSE), or tool..." 
                 type="text"
               />
             </div>
@@ -263,14 +340,14 @@ export function McpHubPage() {
                 All Clients
               </button>
               <button 
-                onClick={() => setSelectedClient('claude')}
+                onClick={() => setSelectedClient('antigravity')}
                 className={`px-3 py-1 text-label-md font-label-md rounded-lg transition-colors ${
-                  selectedClient === 'claude' 
+                  selectedClient === 'antigravity' 
                     ? 'bg-text-primary text-bg-canvas' 
                     : 'bg-bg-surface hover:bg-surface-container-high border border-border-subtle text-text-secondary'
                 }`}
               >
-                Claude Desktop
+                Antigravity
               </button>
               <button 
                 onClick={() => setSelectedClient('cursor')}
@@ -283,24 +360,24 @@ export function McpHubPage() {
                 Cursor IDE
               </button>
               <button 
-                onClick={() => setSelectedClient('continue')}
+                onClick={() => setSelectedClient('claude')}
                 className={`px-3 py-1 text-label-md font-label-md rounded-lg transition-colors ${
-                  selectedClient === 'continue' 
+                  selectedClient === 'claude' 
                     ? 'bg-text-primary text-bg-canvas' 
                     : 'bg-bg-surface hover:bg-surface-container-high border border-border-subtle text-text-secondary'
                 }`}
               >
-                Continue.dev
+                Claude Desktop
               </button>
               <button 
-                onClick={() => setSelectedClient('vscode')}
+                onClick={() => setSelectedClient('codex')}
                 className={`px-3 py-1 text-label-md font-label-md rounded-lg transition-colors ${
-                  selectedClient === 'vscode' 
+                  selectedClient === 'codex' 
                     ? 'bg-text-primary text-bg-canvas' 
                     : 'bg-bg-surface hover:bg-surface-container-high border border-border-subtle text-text-secondary'
                 }`}
               >
-                VS Code Copilot
+                Codex / Continue
               </button>
             </div>
           </div>
@@ -313,9 +390,9 @@ export function McpHubPage() {
           <div className="lg:col-span-7 space-y-3">
             <div className="flex items-center justify-between px-1">
               <span className="text-label-sm font-label-sm text-text-tertiary uppercase tracking-wider">
-                Available Protocol Servers ({filteredServers.length})
+                Gateway Toolsuites ({filteredServers.length})
               </span>
-              <span className="text-code-sm font-code-sm text-text-tertiary">SORT: POPULARITY</span>
+              <span className="text-code-sm font-code-sm text-text-tertiary">PROTOCOL: MCP 2024-11-05</span>
             </div>
 
             {filteredServers.map(server => {
@@ -372,14 +449,21 @@ export function McpHubPage() {
                     {server.description}
                   </p>
 
+                  <div className="flex flex-wrap gap-1.5 mb-3">
+                    {server.tools.map((t, idx) => (
+                      <span key={idx} className="px-2 py-0.5 bg-bg-surface border border-border-subtle rounded text-xs font-code-sm text-text-secondary">
+                        {t}
+                      </span>
+                    ))}
+                  </div>
+
                   <div className="flex items-center justify-between pt-3 border-t border-border-subtle text-code-sm font-code-sm">
                     <div className="flex items-center gap-4 text-text-secondary">
                       <span className="flex items-center gap-1.5">
-                        <span className={`w-1.5 h-1.5 rounded-full ${server.transport === 'stdio' ? 'bg-status-success' : 'bg-status-warning'}`}></span>
+                        <span className={`w-1.5 h-1.5 rounded-full ${server.transport.includes('stdio') ? 'bg-status-success' : 'bg-status-warning'}`}></span>
                         {server.transport}
                       </span>
                       <span>{server.latency} latency</span>
-                      <span>{server.callsPerMonth} calls/mo</span>
                     </div>
                     <span className={`font-label-md flex items-center gap-1 transition-transform ${
                       isSelected ? 'text-primary-container group-hover:translate-x-0.5' : 'text-text-secondary hover:text-text-primary'
@@ -412,31 +496,43 @@ export function McpHubPage() {
               {playgroundOpen && (
                 <div className="p-5 border-t border-border-subtle bg-bg-canvas space-y-4">
                   <p className="text-xs text-text-secondary">
-                    Directly test backend RPC methods against the live Express MCP gateway.
+                    Directly dispatch live JSON-RPC methods and tools/call requests against the active Express MCP endpoint ({mcpHttpUrl}).
                   </p>
                   
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs font-semibold text-text-secondary mb-1">Target Tool</label>
+                      <label className="block text-xs font-semibold text-text-secondary mb-1">Target Method / Tool</label>
                       <select 
                         value={selectedTool}
                         onChange={e => {
                           const t = e.target.value;
                           setSelectedTool(t);
-                          if (t === 'tools/list') setToolParams('{}');
-                          else if (t === 'search_skills') setToolParams(JSON.stringify({ query: 'architecture', limit: 2 }, null, 2));
-                          else if (t === 'get_skill_details') setToolParams(JSON.stringify({ slug: 'octocode-architect' }, null, 2));
+                          if (t === 'ping') setToolParams('{}');
+                          else if (t === 'initialize') setToolParams('{}');
+                          else if (t === 'ping_method') setToolParams('{}');
+                          else if (t === 'tools/list') setToolParams('{}');
+                          else if (t === 'search_skills') setToolParams(JSON.stringify({ query: 'SEO', limit: 3 }, null, 2));
+                          else if (t === 'get_skill_details') setToolParams(JSON.stringify({ slug_or_id: 'geo-seo-suite-ai-search-optimization' }, null, 2));
+                          else if (t === 'install_skill') setToolParams(JSON.stringify({ skill_id: 'code-review-architecture-auditor' }, null, 2));
+                          else if (t === 'get_my_skills') setToolParams('{}');
+                          else if (t === 'execute_skill_workflow') setToolParams(JSON.stringify({ command: '/geo quick https://electron-srl.com', skill_slug: 'geo-seo-suite-ai-search-optimization' }, null, 2));
                         }}
                         className="w-full h-9 px-3 bg-bg-surface border border-border-subtle rounded text-body-sm text-text-primary"
                       >
-                        <option value="tools/list">tools/list (Inspect Registry Schema)</option>
-                        <option value="search_skills">search_skills (Query Database)</option>
-                        <option value="get_skill_details">get_skill_details (Inspect Spec)</option>
+                        <option value="ping">tools/call: ping (Harmless Round-Trip Probe)</option>
+                        <option value="initialize">initialize (Negotiate Protocol & Capabilities)</option>
+                        <option value="ping_method">ping (JSON-RPC Protocol Ping)</option>
+                        <option value="tools/list">tools/list (Inspect All 6 Registered Tools)</option>
+                        <option value="search_skills">tools/call: search_skills (Marketplace Search)</option>
+                        <option value="get_skill_details">tools/call: get_skill_details (Inspect Spec & Deals)</option>
+                        <option value="install_skill">tools/call: install_skill (Acquire Skill.md Package)</option>
+                        <option value="get_my_skills">tools/call: get_my_skills (Authenticated Library)</option>
+                        <option value="execute_skill_workflow">tools/call: execute_skill_workflow (Playbook Engine)</option>
                       </select>
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-text-secondary mb-1">JSON-RPC Params</label>
+                      <label className="block text-xs font-semibold text-text-secondary mb-1">JSON Parameters</label>
                       <input 
                         value={toolParams}
                         onChange={e => setToolParams(e.target.value)}
@@ -451,7 +547,7 @@ export function McpHubPage() {
                     className="px-4 py-2 bg-text-primary text-bg-canvas hover:bg-black rounded text-body-sm font-medium flex items-center gap-2 transition-colors disabled:opacity-50"
                   >
                     <span className="material-symbols-outlined text-[16px]">play_arrow</span>
-                    <span>{rpcLoading ? 'Executing RPC...' : 'Dispatch JSON-RPC Call'}</span>
+                    <span>{rpcLoading ? 'Executing RPC...' : 'Dispatch Live JSON-RPC Call'}</span>
                   </button>
 
                   {rpcResponse && (
@@ -488,11 +584,32 @@ export function McpHubPage() {
                 </span>
               </div>
 
+              {/* Transport URLs Info */}
+              <div className="mt-4 p-3 bg-bg-surface border border-border-subtle rounded-lg space-y-2 text-xs font-code-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-text-tertiary">SSE Endpoint:</span>
+                  <span className="text-text-primary select-all font-mono">{mcpSseUrl}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-text-tertiary">Stdio Bridge:</span>
+                  <span className="text-text-primary select-all font-mono">{activeServer.entrypoint}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-text-tertiary">HTTP POST:</span>
+                  <span className="text-text-primary select-all font-mono">{mcpHttpUrl}</span>
+                </div>
+              </div>
+
               {/* Configuration Snippet Block */}
               <div className="mt-5">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-label-sm font-label-sm text-text-secondary uppercase tracking-wider">
-                    Target: {selectedClient === 'cursor' ? 'cursor_settings.json' : selectedClient === 'continue' ? 'continue_config.json' : 'claude_desktop_config.json'}
+                    Target: {
+                      selectedClient === 'antigravity' ? 'antigravity.json (MCP Servers)' :
+                      selectedClient === 'cursor' ? '.cursor/mcp.json' :
+                      selectedClient === 'codex' ? 'config.json (Codex / Continue)' :
+                      'claude_desktop_config.json'
+                    }
                   </span>
                   <button 
                     onClick={handleCopy}
@@ -517,7 +634,9 @@ export function McpHubPage() {
                 <div className="grid grid-cols-3 gap-2">
                   <div className="p-2.5 bg-bg-surface border border-border-subtle rounded-lg">
                     <span className="text-label-sm font-label-sm text-text-secondary block">Latency</span>
-                    <span className="text-body-md font-code-sm font-semibold text-text-primary">{activeServer.latency}</span>
+                    <span className="text-body-md font-code-sm font-semibold text-text-primary">
+                      {gatewayStatus.online ? `${gatewayStatus.latencyMs}ms` : activeServer.latency}
+                    </span>
                   </div>
                   <div className="p-2.5 bg-bg-surface border border-border-subtle rounded-lg">
                     <span className="text-label-sm font-label-sm text-text-secondary block">Transport</span>
@@ -534,8 +653,8 @@ export function McpHubPage() {
               <div className="mt-4 p-3 bg-accent-tint/50 border border-border-subtle rounded-lg flex items-center gap-3">
                 <span className="material-symbols-outlined text-[20px] text-primary-container">shield</span>
                 <div>
-                  <p className="text-label-sm font-label-sm text-text-primary font-medium">Hermetic Sandboxing Enabled</p>
-                  <p className="text-code-sm font-code-sm text-text-secondary">Process executed with non-root ephemeral credentials.</p>
+                  <p className="text-label-sm font-label-sm text-text-primary font-medium">8-Point Security Sandbox Active</p>
+                  <p className="text-code-sm font-code-sm text-text-secondary">All packages pre-scanned against disk mutation and prompt injection.</p>
                 </div>
               </div>
 
@@ -555,7 +674,7 @@ export function McpHubPage() {
                   className="w-full h-9 bg-bg-canvas border border-border-subtle hover:border-border-strong hover:bg-bg-surface text-text-primary font-label-md rounded-lg flex items-center justify-center gap-2 transition-all duration-150"
                 >
                   <span className={`material-symbols-outlined text-[16px] ${pingTesting ? 'animate-spin' : ''}`}>sync</span>
-                  <span>{pingTesting ? 'Testing Local Ping...' : 'Test Local Ping'}</span>
+                  <span>{pingTesting ? 'Testing Real Round-Trip Ping...' : 'Test Real Round-Trip Ping'}</span>
                 </button>
 
                 <button 
@@ -563,7 +682,7 @@ export function McpHubPage() {
                   className="w-full h-10 bg-primary-container hover:bg-accent-hover text-on-primary font-label-md rounded-lg flex items-center justify-center gap-2 transition-all duration-150 active:scale-[0.99] font-medium shadow-xs"
                 >
                   <span className="material-symbols-outlined text-[18px]">hub</span>
-                  <span>Connect to {selectedClient === 'cursor' ? 'Cursor IDE' : selectedClient === 'continue' ? 'Continue.dev' : 'Claude Desktop'}</span>
+                  <span>Copy Config for {selectedClient === 'antigravity' ? 'Antigravity' : selectedClient === 'cursor' ? 'Cursor IDE' : selectedClient === 'codex' ? 'Codex / Continue' : 'Claude Desktop'}</span>
                 </button>
               </div>
 
@@ -573,10 +692,10 @@ export function McpHubPage() {
             <div className="p-4 bg-bg-surface border border-border-subtle rounded-xl flex items-center justify-between text-body-sm font-body-sm">
               <div className="flex items-center gap-2.5">
                 <span className="material-symbols-outlined text-[18px] text-text-secondary">help_outline</span>
-                <span className="text-text-secondary">Need help setting up client MCP bridges?</span>
+                <span className="text-text-secondary">Need help connecting your agent runtime?</span>
               </div>
-              <a href="#docs" className="text-text-primary font-medium hover:underline flex items-center gap-1">
-                Docs <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
+              <a href="#playground" onClick={() => setPlaygroundOpen(true)} className="text-text-primary font-medium hover:underline flex items-center gap-1">
+                Open Playground <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
               </a>
             </div>
 

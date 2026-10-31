@@ -13,21 +13,37 @@ import {
   MessageSquare
 } from 'lucide-react';
 
+// The workspace sidebar is hidden from the UI; Profile and Dashboard are reached
+// through the navbar profile dropdown. Flip this to restore the sidebar.
+const SIDEBAR_ENABLED = false;
+
 interface SideNavProps {
   activeTab?: string;
+}
+
+interface SideNavLink {
+  id: string;
+  label: string;
+  path: string;
+  icon: any;
+  badge?: string;
+  status?: string;
+  accent?: boolean;
 }
 
 export function SideNav({ activeTab }: SideNavProps) {
   const { path, navigate } = useRouter();
   const { user, logout } = useAuth();
 
-  const links = [
+  if (!SIDEBAR_ENABLED) return null;
+
+  const links: SideNavLink[] = [
     { id: 'overview', label: 'Overview', path: '/dashboard', icon: LayoutDashboard },
     { id: 'library', label: 'My Library', path: '/library', icon: Folder, badge: '6' },
     { id: 'projects', label: 'Projects', path: '/projects', icon: Sparkles, badge: '8' },
-    { id: 'mcp', label: 'MCP Connections', path: '/mcp', icon: Terminal, status: '4 LIVE' },
+    { id: 'creators', label: 'Creator Hub', path: '/creators', icon: Terminal },
     { id: 'chat', label: 'AI Chat', path: '/chat', icon: MessageSquare },
-    { id: 'creator', label: 'Creator Studio', path: '/creator', icon: Terminal },
+    { id: 'creator', label: 'Creator Studio', path: '/creator-studio', icon: Terminal },
     { id: 'settings', label: 'Team & Settings', path: '/settings', icon: Settings },
     { id: 'admin', label: 'Trust & Safety', path: '/admin', icon: ShieldCheck, accent: true },
   ];

@@ -10,7 +10,12 @@ CREATE TABLE IF NOT EXISTS profiles (
   avatar_url TEXT,
   credit_balance REAL DEFAULT 0.00,
   is_unlimited_credit_user INTEGER DEFAULT 0,
-  created_at TEXT NOT NULL
+  created_at TEXT NOT NULL,
+  full_name TEXT,
+  role TEXT DEFAULT 'user',
+  website_url TEXT,
+  onboarding_completed INTEGER DEFAULT 0,
+  updated_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS skills (
@@ -29,7 +34,9 @@ CREATE TABLE IF NOT EXISTS skills (
   current_version TEXT DEFAULT '1.0',
   creator_id TEXT NOT NULL REFERENCES profiles(id),
   security_status TEXT CHECK (security_status IN ('pass', 'fail', 'pending')) DEFAULT 'pass',
-  status TEXT CHECK (status IN ('live', 'draft', 'rejected')) DEFAULT 'live',
+  status TEXT CHECK (status IN ('draft', 'submitted', 'under_review', 'approved', 'published', 'live', 'rejected', 'paused')) DEFAULT 'draft',
+  visibility TEXT CHECK (visibility IN ('public', 'unlisted', 'private')) DEFAULT 'public',
+  rejection_feedback TEXT,
   install_count INTEGER DEFAULT 0,
   view_count INTEGER DEFAULT 0,
   net_votes INTEGER DEFAULT 0,
@@ -37,6 +44,7 @@ CREATE TABLE IF NOT EXISTS skills (
   review_count INTEGER DEFAULT 0,
   package_tree TEXT, -- JSON string representing file structure
   session_preview TEXT, -- JSON string representing sample interactive execution
+  license TEXT DEFAULT 'MIT',
   created_at TEXT NOT NULL
 );
 
@@ -98,5 +106,38 @@ CREATE TABLE IF NOT EXISTS skill_packages (
   version TEXT NOT NULL,
   skill_md_content TEXT NOT NULL,
   files_json TEXT NOT NULL, -- JSON map of { "filename": "content" }
+  storage_path TEXT,
   updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS skill_downloads (
+  id TEXT PRIMARY KEY,
+  skill_id TEXT NOT NULL REFERENCES skills(id),
+  user_id TEXT REFERENCES profiles(id),
+  version TEXT NOT NULL,
+  download_type TEXT CHECK (download_type IN ('markdown', 'zip', 'prompt')) NOT NULL,
+  downloaded_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS skill_submissions (
+  id TEXT PRIMARY KEY,
+  skill_id TEXT NOT NULL REFERENCES skills(id),
+  version TEXT NOT NULL,
+  submitted_by TEXT NOT NULL REFERENCES profiles(id),
+  status TEXT NOT NULL CHECK (status IN ('submitted', 'under_review', 'approved', 'rejected')),
+  validation_report TEXT,
+  reviewer_feedback TEXT,
+  submitted_at TEXT NOT NULL,
+  reviewed_at TEXT,
+  reviewed_by TEXT REFERENCES profiles(id)
+);
+
+CREATE TABLE IF NOT EXISTS skill_versions (
+  id TEXT PRIMARY KEY,
+  skill_id TEXT NOT NULL REFERENCES skills(id),
+  version_number TEXT NOT NULL,
+  changelog TEXT,
+  file_manifest TEXT,
+  created_at TEXT NOT NULL,
+  UNIQUE (skill_id, version_number)
 );

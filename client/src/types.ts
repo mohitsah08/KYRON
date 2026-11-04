@@ -162,6 +162,8 @@ export interface Skill {
   deal_discount_percent?: number;
   user_vote?: number;
   is_saved?: boolean;
+  invocation_count?: number;
+  last_invoked_at?: string;
 }
 
 export interface SecurityAuditRule {
@@ -203,6 +205,8 @@ export interface UserPurchase {
   current_version: string;
   pricing_type: string;
   price: number;
+  creator_name?: string;
+  logo_url?: string;
 }
 
 export interface CreatorAnalytics {
@@ -303,8 +307,48 @@ export interface ApiKeyItem {
   key_preview?: string;
   key_prefix?: string;
   created_at: string;
-  last_used: string;
+  last_used?: string;
+  last_used_at?: string;
   status?: 'active' | 'revoked';
+}
+
+export interface DashboardData {
+  metrics: {
+    active_skills: {
+      count: number;
+      slots_limit: number | null;
+      description: string;
+    };
+    monthly_calls: {
+      total: number;
+      tokens: number;
+      growth_percent: number | null;
+      period: string;
+    };
+    average_latency: {
+      value_ms: number | null;
+      display: string;
+      sample_count: number;
+    };
+    system_health: {
+      status: string;
+      success_rate: number | null;
+      details: string;
+      has_monitoring: boolean;
+    };
+  };
+  frequently_invoked_skills: Skill[];
+  recent_activity: {
+    id: string;
+    skillName: string;
+    command: string;
+    status: string;
+    latency: string;
+    tokens: string;
+    timestamp: string;
+    payload?: any;
+  }[];
+  active_skills_list: Skill[];
 }
 
 // AI Chat & Execution Types

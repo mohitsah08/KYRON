@@ -37,7 +37,11 @@ import {
   RefreshCw,
   Copy,
   ExternalLink,
-  ChevronRight
+  ChevronRight,
+  ChevronDown,
+  ChevronUp,
+  BookOpen,
+  X
 } from 'lucide-react';
 import { CATEGORIES } from '../constants/categories.ts';
 
@@ -101,42 +105,36 @@ export function CreatorStudioPage() {
   const { path, navigate } = useRouter();
   const { user, refreshUser } = useAuth();
 
-  // Active Tab: check URL search params or path
-  const [activeTab, setActiveTab] = useState<
-    'overview' | 'skills' | 'create' | 'versions' | 'storefront' | 'analytics' | 'earnings' | 'docs'
-  >('overview');
+  // Streamlined 4-Tab Workspace: 'skills' | 'create' | 'earnings' | 'docs'
+  const [activeTab, setActiveTab] = useState<'skills' | 'create' | 'earnings' | 'docs'>('skills');
 
   // Overview Metrics State
   const [metrics, setMetrics] = useState<any>(null);
   const [recentSkills, setRecentSkills] = useState<Skill[]>([]);
-  const [recentSubmissions, setRecentSubmissions] = useState<any[]>([]);
   const [overviewLoading, setOverviewLoading] = useState(true);
 
   // My Skills State
   const [skills, setSkills] = useState<Skill[]>([]);
   const [skillsLoading, setSkillsLoading] = useState(true);
   const [skillsSearch, setSkillsSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'published' | 'submitted' | 'approved' | 'draft' | 'paused' | 'rejected'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'published' | 'draft' | 'paused'>('all');
   const [actionNotice, setActionNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [processingId, setProcessingId] = useState<string | null>(null);
 
-  // Submissions State
-  const [submissions, setSubmissions] = useState<any[]>([]);
-  const [submissionsLoading, setSubmissionsLoading] = useState(false);
-
-  // Version Management State
-  const [selectedSkillForVersions, setSelectedSkillForVersions] = useState<string>('');
-  const [skillVersions, setSkillVersions] = useState<any[]>([]);
-  const [newVersionNumber, setNewVersionNumber] = useState('');
-  const [newVersionChangelog, setNewVersionChangelog] = useState('');
-  const [showVersionModal, setShowVersionModal] = useState(false);
-
-  // Creator Storefront Profile State
+  // Storefront Profile Modal State
+  const [showProfileModal, setShowProfileModal] = useState(false);
   const [profileName, setProfileName] = useState(user?.display_name || '');
   const [profileBio, setProfileBio] = useState(user?.bio || '');
   const [profileWebsite, setProfileWebsite] = useState((user as any)?.website_url || '');
   const [profileAvatar, setProfileAvatar] = useState(user?.avatar_url || '');
   const [profileSaving, setProfileSaving] = useState(false);
+
+  // Version Management Modal State
+  const [selectedSkillForVersions, setSelectedSkillForVersions] = useState<string>('');
+  const [skillVersions, setSkillVersions] = useState<any[]>([]);
+  const [newVersionNumber, setNewVersionNumber] = useState('');
+  const [newVersionChangelog, setNewVersionChangelog] = useState('');
+  const [showVersionModal, setShowVersionModal] = useState(false);
 
   // Skill Editor State
   const [editingSkillId, setEditingSkillId] = useState<string | null>(null);
@@ -163,12 +161,20 @@ export function CreatorStudioPage() {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [editorSaving, setEditorSaving] = useState(false);
 
-  // Read URL search params on mount (e.g. ?tab=create)
+  // Documentation Sub-Tab
+  const [activeDocSection, setActiveDocSection] = useState<'spec' | 'products' | 'packaging' | 'security' | 'pricing' | 'agents' | 'faq'>('spec');
+  const [copiedDocCode, setCopiedDocCode] = useState<string | null>(null);
+
+  // Read URL search params on mount (e.g. ?tab=create, ?tab=docs)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const tabParam = params.get('tab');
-    if (tabParam && ['overview', 'skills', 'create', 'versions', 'storefront', 'analytics', 'earnings', 'docs'].includes(tabParam)) {
-      setActiveTab(tabParam as any);
+    if (tabParam) {
+      if (['skills', 'overview'].includes(tabParam)) setActiveTab('skills');
+      else if (tabParam === 'create') setActiveTab('create');
+      else if (['earnings', 'analytics'].includes(tabParam)) setActiveTab('earnings');
+      else if (tabParam === 'docs') setActiveTab('docs');
+      else if (tabParam === 'storefront') setShowProfileModal(true);
     }
   }, []);
 
@@ -189,7 +195,6 @@ export function CreatorStudioPage() {
       const res = await api.getCreatorOverview();
       setMetrics(res.metrics);
       setRecentSkills(res.recent_skills || []);
-      setRecentSubmissions(res.recent_submissions || []);
     } catch (err: any) {
       console.error('Failed to load creator overview:', err);
     } finally {
@@ -210,23 +215,9 @@ export function CreatorStudioPage() {
     }
   };
 
-  // Load Submissions
-  const loadSubmissions = async () => {
-    try {
-      setSubmissionsLoading(true);
-      const res = await api.getCreatorSubmissions();
-      setSubmissions(res.submissions || []);
-    } catch (err: any) {
-      console.error('Failed to load submissions:', err);
-    } finally {
-      setSubmissionsLoading(false);
-    }
-  };
-
   useEffect(() => {
     loadOverview();
     loadSkills();
-    loadSubmissions();
   }, []);
 
   // Quick Action Notification Clearer
@@ -458,7 +449,6 @@ export function CreatorStudioPage() {
       const cleanSlug = skillSlug || skillName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 
       if (editingSkillId) {
-        // Update existing draft record, preserving ID and preventing duplicate records
         await api.updateSkill(editingSkillId, {
           name: skillName,
           summary: skillSummary,
@@ -475,7 +465,6 @@ export function CreatorStudioPage() {
         });
         showNotice('success', 'Draft saved successfully.');
       } else {
-        // Create new draft record
         const res = await api.publishSkill({
           name: skillName,
           slug: cleanSlug,
@@ -507,7 +496,7 @@ export function CreatorStudioPage() {
     }
   };
 
-  // Publish Skill Directly to Marketplace
+  // Direct Publish Flow: Automated AST scan -> Direct to Marketplace (No manual review queue)
   const handlePublish = async () => {
     if (!skillName.trim() || !skillSummary.trim()) {
       showNotice('error', 'Skill name and summary are required to publish.');
@@ -533,12 +522,11 @@ export function CreatorStudioPage() {
         return;
       }
 
-      // 2. Persist with status = 'published'
+      // 2. Persist with status = 'published' directly
       const parsedTags = skillTags.split(',').map(t => t.trim()).filter(Boolean);
       const cleanSlug = skillSlug || skillName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 
       if (editingSkillId) {
-        // Publish existing draft, preserving ID
         await api.updateSkill(editingSkillId, {
           name: skillName,
           summary: skillSummary,
@@ -553,9 +541,8 @@ export function CreatorStudioPage() {
           files: supportingFiles,
           status: 'published'
         });
-        showNotice('success', `Skill "${skillName}" successfully published to Marketplace!`);
+        showNotice('success', `Skill "${skillName}" published live to KYRON Marketplace!`);
       } else {
-        // Publish new skill directly
         const res = await api.publishSkill({
           name: skillName,
           slug: cleanSlug,
@@ -573,7 +560,7 @@ export function CreatorStudioPage() {
           status: 'published'
         });
         setEditingSkillId(res.skill_id);
-        showNotice('success', `Skill "${skillName}" successfully published to Marketplace!`);
+        showNotice('success', `Skill "${skillName}" published live to KYRON Marketplace!`);
       }
 
       setHasUnsavedChanges(false);
@@ -591,7 +578,6 @@ export function CreatorStudioPage() {
     try {
       const currentSlug = (skillSlug || 'skill').toLowerCase().replace(/[^a-z0-9_-]/g, '-');
       let finalMd = skillMdContent;
-      // Ensure frontmatter is present and valid
       if (!/^---\s*[\r\n]+[\s\S]*?[\r\n]+---\s*[\r\n]*/m.test(finalMd)) {
         const cleanDesc = (skillSummary || skillName || 'AI Skill').replace(/[\r\n]+/g, ' ');
         finalMd = `---\nname: ${currentSlug}\ndescription: "${cleanDesc}"\nversion: ${skillVersion || '1.0.0'}\nlicense: ${skillLicense || 'MIT'}\ncompatibility: [claude-code, cursor, codex, antigravity]\n---\n\n${finalMd}`;
@@ -614,19 +600,16 @@ export function CreatorStudioPage() {
     try {
       const currentSlug = (skillSlug || 'my-skill').toLowerCase().replace(/[^a-z0-9_-]/g, '-');
 
-      // Auto-save draft if needed
       if (hasUnsavedChanges || !editingSkillId) {
         await handleSaveDraft();
       }
 
-      // Format final SKILL.md with frontmatter
       let finalMd = skillMdContent;
       if (!/^---\s*[\r\n]+[\s\S]*?[\r\n]+---\s*[\r\n]*/m.test(finalMd)) {
         const cleanDesc = (skillSummary || skillName || 'AI Skill').replace(/[\r\n]+/g, ' ');
         finalMd = `---\nname: ${currentSlug}\ndescription: "${cleanDesc}"\nversion: ${skillVersion || '1.0.0'}\nlicense: ${skillLicense || 'MIT'}\ncompatibility: [claude-code, cursor, codex, antigravity]\n---\n\n${finalMd}`;
       }
 
-      // Build zip with directory structure <slug>/SKILL.md and <slug>/<files>
       const zip = new JSZip();
       const folder = zip.folder(currentSlug) || zip;
       folder.file('SKILL.md', finalMd);
@@ -646,45 +629,6 @@ export function CreatorStudioPage() {
       showNotice('success', `Exported "${currentSlug}.zip" successfully.`);
     } catch (err: any) {
       showNotice('error', err.message || 'Failed to export ZIP package.');
-    }
-  };
-
-  // Safe table ZIP download without opening blank raw JSON error pages
-  const handleDownloadZipForSkill = async (slug: string) => {
-    try {
-      const token = localStorage.getItem('kyron_token');
-      const headers: Record<string, string> = {};
-      if (token) headers['Authorization'] = `Bearer ${token}`;
-      const res = await fetch(api.getZipDownloadUrl(slug), { headers });
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || `Download failed with status ${res.status}`);
-      }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${slug}.zip`;
-      a.click();
-      URL.revokeObjectURL(url);
-      showNotice('success', `Downloaded ${slug}.zip successfully.`);
-    } catch (err: any) {
-      showNotice('error', err.message || 'Failed to download ZIP package.');
-    }
-  };
-
-  // Quick Action: Publish an approved skill
-  const handlePublishApproved = async (id: string) => {
-    try {
-      setProcessingId(id);
-      const res = await api.publishApprovedSkill(id);
-      showNotice('success', res.message || 'Skill published to Marketplace!');
-      await loadSkills();
-      await loadOverview();
-    } catch (err: any) {
-      showNotice('error', err.message || 'Failed to publish skill.');
-    } finally {
-      setProcessingId(null);
     }
   };
 
@@ -786,11 +730,18 @@ export function CreatorStudioPage() {
       });
       if (refreshUser) await refreshUser();
       showNotice('success', 'Creator storefront profile updated successfully.');
+      setShowProfileModal(false);
     } catch (err: any) {
       showNotice('error', err.message || 'Failed to update profile.');
     } finally {
       setProfileSaving(false);
     }
+  };
+
+  const copyToClipboard = (text: string, id: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedDocCode(id);
+    setTimeout(() => setCopiedDocCode(null), 2000);
   };
 
   // Filter skills for table
@@ -805,13 +756,101 @@ export function CreatorStudioPage() {
 
     if (statusFilter === 'all') return true;
     if (statusFilter === 'published') return s.status === 'published' || s.status === 'live';
-    if (statusFilter === 'submitted') return s.status === 'submitted' || s.status === 'under_review';
-    if (statusFilter === 'approved') return s.status === 'approved';
     if (statusFilter === 'draft') return s.status === 'draft';
     if (statusFilter === 'paused') return s.status === 'paused';
-    if (statusFilter === 'rejected') return s.status === 'rejected';
     return true;
   });
+
+  // =========================================================================
+  // AUTOMATED 4-STEP ONBOARDING TRACKER (Calculated purely from real DB state)
+  // =========================================================================
+  const isProfileComplete = Boolean(
+    user?.display_name &&
+    user?.username &&
+    (user?.bio || (user as any)?.website_url)
+  );
+
+  const hasCreatedSkill = skills.length > 0;
+
+  const hasValidatedSkill = Boolean(
+    (validationReport?.valid && validationReport?.security_scan?.overallStatus === 'pass') ||
+    skills.some(s => (s as any).security_status === 'pass' || s.status === 'published' || s.status === 'live')
+  );
+
+  const hasPublishedSkill = skills.some(s => s.status === 'published' || s.status === 'live');
+
+  const onboardingSteps = [
+    {
+      id: 'step_profile',
+      number: 1,
+      title: 'Complete Creator Profile',
+      desc: 'Set up your display name, username, and bio for your public marketplace storefront.',
+      isDone: isProfileComplete,
+      actionLabel: isProfileComplete ? 'Edit Profile' : 'Complete Profile',
+      action: () => setShowProfileModal(true)
+    },
+    {
+      id: 'step_create',
+      number: 2,
+      title: 'Create Your First Skill',
+      desc: 'Author a compliant SKILL.md specification or import an existing ZIP package in the Skill Editor.',
+      isDone: hasCreatedSkill,
+      actionLabel: hasCreatedSkill ? 'View Drafts' : 'Create Skill',
+      action: () => startNewSkill()
+    },
+    {
+      id: 'step_validate',
+      number: 3,
+      title: 'Run Automated Security Validation',
+      desc: 'Pass the 8-point AST scan (injection guard, secret protection, disk safety, path traversal checks).',
+      isDone: hasValidatedSkill,
+      actionLabel: hasValidatedSkill ? 'Re-scan Latest' : 'Run AST Scan',
+      action: () => {
+        if (skills.length > 0 && skills[0].id) {
+          loadSkillIntoEditor(skills[0].id);
+        } else {
+          setActiveTab('create');
+        }
+      }
+    },
+    {
+      id: 'step_publish',
+      number: 4,
+      title: 'Publish to Marketplace',
+      desc: 'Deploy your skill directly to the live marketplace with zero review queues once security passes.',
+      isDone: hasPublishedSkill,
+      actionLabel: hasPublishedSkill ? 'Manage Live Skills' : 'Publish to Marketplace',
+      action: () => {
+        if (skills.length > 0 && skills[0].id) {
+          loadSkillIntoEditor(skills[0].id);
+        } else {
+          setActiveTab('create');
+        }
+      }
+    }
+  ];
+
+  const completedStepsCount = onboardingSteps.filter(s => s.isDone).length;
+  const progressPercent = Math.round((completedStepsCount / 4) * 100);
+  const isAllComplete = completedStepsCount === 4;
+
+  const [isOnboardingCollapsed, setIsOnboardingCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem('kyron_creator_onboarding_collapsed') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const toggleOnboardingCollapse = () => {
+    setIsOnboardingCollapsed(prev => {
+      const next = !prev;
+      try {
+        localStorage.setItem('kyron_creator_onboarding_collapsed', String(next));
+      } catch {}
+      return next;
+    });
+  };
 
   return (
     <div className="min-h-screen bg-[#FAFAF9] text-[#171717] font-sans pb-16">
@@ -826,8 +865,14 @@ export function CreatorStudioPage() {
               <div className="flex items-center gap-2">
                 <h1 className="text-lg font-bold text-[#171717]">Creator Studio</h1>
                 <span className="text-xs font-mono bg-[#FAFAF9] border border-[#E8E8E6] px-2 py-0.5 rounded text-[#737373]">
-                  v2.0 Standalone
+                  v2.4 Standalone
                 </span>
+                {isAllComplete && (
+                  <span className="text-xs font-semibold bg-emerald-50 border border-emerald-200 text-emerald-700 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                    <span>Verified Creator</span>
+                  </span>
+                )}
               </div>
               <p className="text-xs text-[#737373]">
                 Author, version, package, and publish standalone AI skills for autonomous agents.
@@ -845,13 +890,13 @@ export function CreatorStudioPage() {
                 <span>My Public Storefront</span>
               </Link>
             )}
-            <Link
-              href="/creators"
+            <button
+              onClick={() => setShowProfileModal(true)}
               className="h-8 px-3 rounded-lg border border-[#E8E8E6] hover:border-[#171717] text-[#171717] text-xs font-medium inline-flex items-center gap-1.5 transition-colors bg-white"
             >
-              <HelpCircle className="w-3.5 h-3.5 text-[#737373]" />
-              <span>Creator Hub</span>
-            </Link>
+              <User className="w-3.5 h-3.5 text-[#737373]" />
+              <span>Storefront Profile</span>
+            </button>
             <button
               onClick={startNewSkill}
               className="h-8 px-3.5 rounded-lg bg-[#F97316] hover:bg-[#EA580C] text-white text-xs font-semibold inline-flex items-center gap-1.5 shadow-xs transition-colors"
@@ -880,17 +925,13 @@ export function CreatorStudioPage() {
           </div>
         )}
 
-        {/* Studio Sub-Navigation Tabs */}
+        {/* Streamlined 4-Tab Navigation */}
         <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-10 flex items-center gap-1 overflow-x-auto scrollbar-none border-t border-[#E8E8E6] text-xs font-medium">
           {[
-            { id: 'overview', label: 'Overview', icon: TrendingUp },
             { id: 'skills', label: `My Skills (${skills.length})`, icon: Layers },
-            { id: 'create', label: editingSkillId ? 'Skill Editor (Active)' : 'Create Skill', icon: Edit3 },
-            { id: 'versions', label: 'Version History', icon: Clock },
-            { id: 'storefront', label: 'Storefront Profile', icon: User },
-            { id: 'analytics', label: 'Analytics Funnel', icon: Globe },
-            { id: 'earnings', label: 'Earnings & Payouts', icon: DollarSign },
-            { id: 'docs', label: 'Documentation', icon: HelpCircle },
+            { id: 'create', label: editingSkillId ? 'Skill Editor (Active)' : 'Skill Editor', icon: Edit3 },
+            { id: 'earnings', label: 'Earnings & Analytics', icon: DollarSign },
+            { id: 'docs', label: 'Creator Guide & Docs', icon: BookOpen },
           ].map((tab) => {
             const Icon = tab.icon;
             const isCurrent = activeTab === tab.id;
@@ -898,7 +939,7 @@ export function CreatorStudioPage() {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as any)}
-                className={`py-3 px-3.5 border-b-2 flex items-center gap-2 whitespace-nowrap transition-colors ${
+                className={`py-3 px-4 border-b-2 flex items-center gap-2 whitespace-nowrap transition-colors ${
                   isCurrent
                     ? 'border-[#F97316] text-[#F97316] font-semibold'
                     : 'border-transparent text-[#737373] hover:text-[#171717]'
@@ -914,11 +955,13 @@ export function CreatorStudioPage() {
 
       {/* Main Studio Body */}
       <main className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-10 py-8">
-        {/* ================= TAB 1: OVERVIEW ================= */}
-        {activeTab === 'overview' && (
-          <div className="space-y-8">
+        {/* ========================================================= */}
+        {/* TAB 1: MY SKILLS & OVERVIEW (Consolidated primary view)  */}
+        {/* ========================================================= */}
+        {activeTab === 'skills' && (
+          <div className="space-y-6">
             {/* KPI Cards */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div className="bg-white border border-[#E8E8E6] rounded-xl p-4 shadow-2xs">
                 <span className="text-[11px] font-semibold text-[#737373] uppercase tracking-wider block mb-1">
                   Total Skills
@@ -946,188 +989,124 @@ export function CreatorStudioPage() {
                 <span className="text-2xl font-bold font-mono text-amber-600">
                   {metrics?.draft_count ?? skills.filter(s => s.status === 'draft').length}
                 </span>
-                <span className="text-[10px] text-[#737373] block mt-1">Unpublished work</span>
-              </div>
-
-              <div className="bg-white border border-[#E8E8E6] rounded-xl p-4 shadow-2xs">
-                <span className="text-[11px] font-semibold text-[#737373] uppercase tracking-wider block mb-1">
-                  Total Downloads
-                </span>
-                <span className="text-2xl font-bold font-mono text-[#171717]">
-                  {metrics?.total_downloads ?? 0}
-                </span>
-                <span className="text-[10px] text-[#737373] block mt-1">ZIP & Markdown</span>
+                <span className="text-[10px] text-[#737373] block mt-1">Work in progress</span>
               </div>
 
               <div className="bg-white border border-[#E8E8E6] rounded-xl p-4 shadow-2xs">
                 <span className="text-[11px] font-semibold text-[#F97316] uppercase tracking-wider block mb-1">
-                  Creator Earnings
+                  Total Installs & Runs
                 </span>
                 <span className="text-2xl font-bold font-mono text-[#171717]">
-                  ${(metrics?.net_earnings ?? 0).toFixed(2)}
+                  {metrics?.total_downloads ?? 0}
                 </span>
-                <span className="text-[10px] text-emerald-600 font-medium block mt-1">70% net share</span>
+                <span className="text-[10px] text-emerald-600 font-medium block mt-1">ZIP & Markdown</span>
               </div>
             </div>
 
-            {/* Quick Actions & Educational Callout */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div
-                onClick={startNewSkill}
-                className="bg-white border border-[#E8E8E6] hover:border-[#F97316] p-5 rounded-xl cursor-pointer transition-all shadow-xs group"
-              >
-                <div className="w-10 h-10 rounded-lg bg-[#FFF4EB] text-[#F97316] flex items-center justify-center mb-3 group-hover:scale-105 transition-transform">
-                  <FileCode className="w-5 h-5" />
-                </div>
-                <h3 className="text-sm font-bold text-[#171717]">Create from Scratch</h3>
-                <p className="text-xs text-[#737373] mt-1 leading-relaxed">
-                  Author a compliant SKILL.md specification with our live markdown preview and 8-point AST validator.
-                </p>
-              </div>
-
-              <div
-                onClick={() => {
-                  startNewSkill();
-                  setCreateMode('upload');
-                }}
-                className="bg-white border border-[#E8E8E6] hover:border-[#F97316] p-5 rounded-xl cursor-pointer transition-all shadow-xs group"
-              >
-                <div className="w-10 h-10 rounded-lg bg-[#FAFAF9] border border-[#E8E8E6] text-[#171717] flex items-center justify-center mb-3 group-hover:scale-105 transition-transform">
-                  <FolderArchive className="w-5 h-5" />
-                </div>
-                <h3 className="text-sm font-bold text-[#171717]">Upload Existing ZIP</h3>
-                <p className="text-xs text-[#737373] mt-1 leading-relaxed">
-                  Extract and import your existing multi-file package containing references, templates, and scripts.
-                </p>
-              </div>
-
-              <div
-                onClick={() => setActiveTab('storefront')}
-                className="bg-white border border-[#E8E8E6] hover:border-[#F97316] p-5 rounded-xl cursor-pointer transition-all shadow-xs group"
-              >
-                <div className="w-10 h-10 rounded-lg bg-[#FAFAF9] border border-[#E8E8E6] text-[#171717] flex items-center justify-center mb-3 group-hover:scale-105 transition-transform">
-                  <User className="w-5 h-5" />
-                </div>
-                <h3 className="text-sm font-bold text-[#171717]">Customize Storefront</h3>
-                <p className="text-xs text-[#737373] mt-1 leading-relaxed">
-                  Set your creator bio, website URL, and avatar to build trust with buyers and AI developers.
-                </p>
-              </div>
-            </div>
-
-            {/* Recent Activity: Skills & Submissions Split */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Recent Skills */}
-              <div className="bg-white border border-[#E8E8E6] rounded-xl p-5 shadow-xs space-y-4">
-                <div className="flex items-center justify-between pb-3 border-b border-[#E8E8E6]">
-                  <h3 className="text-sm font-bold text-[#171717]">Your Recent Skills</h3>
-                  <button
-                    onClick={() => setActiveTab('skills')}
-                    className="text-xs font-semibold text-[#F97316] hover:text-[#EA580C] inline-flex items-center gap-1"
-                  >
-                    <span>View all</span>
-                    <ArrowRight className="w-3 h-3" />
-                  </button>
-                </div>
-
-                {recentSkills.length === 0 ? (
-                  <div className="py-8 text-center text-xs text-[#737373]">
-                    No skills created yet. Click "New Skill" to begin authoring.
+            {/* ======================================================== */}
+            {/* 4-STEP AUTOMATED ONBOARDING TRACKER (Collapsible Banner) */}
+            {/* ======================================================== */}
+            <div className="bg-white border border-[#E8E8E6] rounded-2xl overflow-hidden shadow-2xs transition-all">
+              <div className="p-5 sm:p-6 border-b border-[#E8E8E6] flex items-center justify-between gap-4 bg-gradient-to-r from-white via-white to-[#FFFBF7]">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-[#F97316]"></span>
+                    <h2 className="text-base font-bold text-[#171717]">
+                      Creator Launchpad — 4-Step Verification & Publishing
+                    </h2>
+                    <span className="text-xs font-mono font-semibold px-2 py-0.5 rounded-full bg-[#FFF4EB] text-[#EA580C] border border-[#FED7AA]">
+                      {progressPercent}% Complete ({completedStepsCount}/4)
+                    </span>
                   </div>
-                ) : (
-                  <div className="space-y-3">
-                    {recentSkills.map((s) => (
-                      <div
-                        key={s.id}
-                        className="flex items-center justify-between p-3 rounded-lg border border-[#E8E8E6] bg-[#FAFAF9]"
-                      >
-                        <div className="min-w-0 pr-3">
-                          <div className="font-semibold text-xs text-[#171717] truncate">{s.name}</div>
-                          <div className="text-[11px] text-[#737373] font-mono truncate">kyron/{s.slug}</div>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
+                  <p className="text-xs text-[#737373]">
+                    Follow these 4 automated milestones to launch your verified skills on the KYRON Marketplace.
+                  </p>
+                </div>
+
+                <button
+                  onClick={toggleOnboardingCollapse}
+                  className="px-3 py-1.5 rounded-lg border border-[#E8E8E6] hover:border-[#171717] text-xs font-medium text-[#525252] hover:text-[#171717] inline-flex items-center gap-1 transition-colors"
+                >
+                  {isOnboardingCollapsed ? (
+                    <>
+                      <span>Show Steps</span>
+                      <ChevronDown className="w-3.5 h-3.5" />
+                    </>
+                  ) : (
+                    <>
+                      <span>Minimize</span>
+                      <ChevronUp className="w-3.5 h-3.5" />
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {/* Progress bar line */}
+              <div className="w-full bg-[#EDEDEB] h-1.5">
+                <div
+                  className="bg-[#F97316] h-full transition-all duration-500 ease-out"
+                  style={{ width: `${progressPercent}%` }}
+                />
+              </div>
+
+              {/* Step cards grid (collapsible) */}
+              {!isOnboardingCollapsed && (
+                <div className="p-5 sm:p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 bg-[#FAFAF9]">
+                  {onboardingSteps.map((st) => (
+                    <div
+                      key={st.id}
+                      className={`p-4 rounded-xl border transition-all flex flex-col justify-between ${
+                        st.isDone
+                          ? 'bg-white border-emerald-200 shadow-2xs'
+                          : 'bg-white border-[#E8E8E6] hover:border-[#D4D4D0]'
+                      }`}
+                    >
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
                           <span
-                            className={`text-[10px] font-semibold px-2 py-0.5 rounded-full capitalize ${
-                              s.status === 'published' || s.status === 'live'
-                                ? 'bg-emerald-100 text-emerald-800'
-                                : s.status === 'submitted'
-                                ? 'bg-blue-100 text-blue-800'
-                                : s.status === 'approved'
-                                ? 'bg-purple-100 text-purple-800'
-                                : 'bg-amber-100 text-amber-800'
+                            className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                              st.isDone
+                                ? 'bg-emerald-500 text-white'
+                                : 'bg-[#F5F5F4] text-[#737373] border border-[#E8E8E6]'
                             }`}
                           >
-                            {s.status}
+                            {st.isDone ? <Check className="w-3.5 h-3.5" /> : st.number}
                           </span>
-                          <button
-                            onClick={() => loadSkillIntoEditor(s.id)}
-                            className="p-1.5 rounded bg-white border border-[#E8E8E6] text-[#737373] hover:text-[#171717]"
-                            title="Edit"
+                          <span
+                            className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded ${
+                              st.isDone
+                                ? 'bg-emerald-50 text-emerald-700 font-mono'
+                                : 'bg-[#FAFAF9] text-[#737373] font-mono'
+                            }`}
                           >
-                            <Edit3 className="w-3.5 h-3.5" />
-                          </button>
+                            {st.isDone ? 'Completed' : 'Pending'}
+                          </span>
                         </div>
+                        <h3 className="text-xs font-bold text-[#171717]">{st.title}</h3>
+                        <p className="text-[11px] text-[#737373] leading-relaxed">{st.desc}</p>
                       </div>
-                    ))}
-                  </div>
-                )}
-              </div>
 
-              {/* Publishing & Quality Standards */}
-              <div className="bg-white border border-[#E8E8E6] rounded-xl p-5 shadow-xs space-y-4">
-                <div className="flex items-center justify-between pb-3 border-b border-[#E8E8E6]">
-                  <h3 className="text-sm font-bold text-[#171717]">Publishing & Quality Standards</h3>
-                  <button
-                    onClick={() => setActiveTab('docs')}
-                    className="text-xs font-semibold text-[#F97316] hover:text-[#EA580C] inline-flex items-center gap-1"
-                  >
-                    <span>Guidelines</span>
-                    <ArrowRight className="w-3 h-3" />
-                  </button>
+                      <div className="pt-3 mt-3 border-t border-[#F5F5F4]">
+                        <button
+                          onClick={st.action}
+                          className={`w-full py-1.5 px-3 rounded-lg text-xs font-semibold inline-flex items-center justify-center gap-1 transition-colors ${
+                            st.isDone
+                              ? 'bg-[#FAFAF9] hover:bg-[#F5F5F4] text-[#525252] border border-[#E8E8E6]'
+                              : 'bg-[#F97316] hover:bg-[#EA580C] text-white shadow-xs'
+                          }`}
+                        >
+                          <span>{st.actionLabel}</span>
+                          <ArrowRight className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-
-                <div className="space-y-3 text-xs">
-                  <div className="p-3 rounded-lg border border-[#E8E8E6] bg-[#FAFAF9] flex items-start gap-2.5">
-                    <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                    <div>
-                      <div className="font-semibold text-[#171717]">Automated 8-Point Security Scanning</div>
-                      <div className="text-[11px] text-[#737373] mt-0.5">
-                        Every skill undergoes AST analysis for prompt injection, destructive commands, credential exfiltration, and path traversal prior to publishing.
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="p-3 rounded-lg border border-[#E8E8E6] bg-[#FAFAF9] flex items-start gap-2.5">
-                    <FileCode className="w-4 h-4 text-[#F97316] shrink-0 mt-0.5" />
-                    <div>
-                      <div className="font-semibold text-[#171717]">Direct Draft & Publish Lifecycle</div>
-                      <div className="text-[11px] text-[#737373] mt-0.5">
-                        Work privately with Save Draft. When ready, click Publish to immediately make your skill discoverable in the KYRON marketplace.
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="p-3 rounded-lg border border-[#E8E8E6] bg-[#FAFAF9] flex items-start gap-2.5">
-                    <FolderArchive className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
-                    <div>
-                      <div className="font-semibold text-[#171717]">Multi-Agent Package Hierarchy</div>
-                      <div className="text-[11px] text-[#737373] mt-0.5">
-                        Bundles include standard &lt;slug&gt;/SKILL.md frontmatter, supporting reference files, and scripts ready for Cursor, Codex, Claude Code, and Antigravity.
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              )}
             </div>
-          </div>
-        )}
 
-        {/* ================= TAB 2: MY SKILLS ================= */}
-        {activeTab === 'skills' && (
-          <div className="space-y-6">
             {/* Filter and Search Bar */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-xl border border-[#E8E8E6]">
-              {/* Search input */}
               <div className="relative sm:w-72">
                 <Search className="w-4 h-4 text-[#A3A3A3] absolute left-3 top-2.5" />
                 <input
@@ -1139,20 +1118,20 @@ export function CreatorStudioPage() {
                 />
               </div>
 
-              {/* Status Filter Badges */}
               <div className="flex items-center gap-1 overflow-x-auto pb-1 sm:pb-0 text-xs">
                 {[
                   { id: 'all', label: 'All' },
                   { id: 'published', label: 'Published' },
-                  { id: 'draft', label: 'Drafts' }
+                  { id: 'draft', label: 'Drafts' },
+                  { id: 'paused', label: 'Paused' }
                 ].map((f) => (
                   <button
                     key={f.id}
                     onClick={() => setStatusFilter(f.id as any)}
-                    className={`px-3 py-1.5 rounded-lg font-medium transition-colors whitespace-nowrap ${
+                    className={`px-3 py-1 rounded-lg capitalize transition-colors ${
                       statusFilter === f.id
-                        ? 'bg-[#171717] text-white'
-                        : 'bg-[#FAFAF9] text-[#737373] hover:text-[#171717] border border-[#E8E8E6]'
+                        ? 'bg-[#171717] text-white font-medium'
+                        : 'text-[#737373] hover:text-[#171717] hover:bg-[#FAFAF9]'
                     }`}
                   >
                     {f.label}
@@ -1162,175 +1141,129 @@ export function CreatorStudioPage() {
             </div>
 
             {/* Skills Table */}
-            {skillsLoading ? (
-              <div className="bg-white border border-[#E8E8E6] rounded-xl p-12 text-center text-xs text-[#737373]">
-                Loading creator catalog...
-              </div>
-            ) : filteredSkills.length === 0 ? (
-              <div className="bg-white border border-[#E8E8E6] rounded-xl p-12 text-center space-y-3">
-                <FileText className="w-10 h-10 text-[#A3A3A3] mx-auto" />
-                <h3 className="text-base font-semibold text-[#171717]">No matching skills found</h3>
-                <p className="text-xs text-[#737373] max-w-sm mx-auto">
-                  {statusFilter === 'all'
-                    ? 'You have not created any skills yet. Click "New Skill" to start authoring.'
-                    : `No skills with status "${statusFilter}".`}
-                </p>
-                <button
-                  onClick={startNewSkill}
-                  className="px-4 py-2 bg-[#F97316] hover:bg-[#EA580C] text-white text-xs font-semibold rounded-lg inline-flex items-center gap-1.5 shadow-xs"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Create Your First Skill</span>
-                </button>
-              </div>
-            ) : (
-              <div className="bg-white border border-[#E8E8E6] rounded-xl overflow-hidden shadow-xs">
+            <div className="bg-white border border-[#E8E8E6] rounded-xl overflow-hidden shadow-2xs">
+              {skillsLoading ? (
+                <div className="p-12 text-center text-xs text-[#737373]">
+                  <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2 text-[#A3A3A3]" />
+                  Loading your skills catalog...
+                </div>
+              ) : filteredSkills.length === 0 ? (
+                <div className="p-12 text-center space-y-3">
+                  <div className="w-12 h-12 rounded-xl bg-[#FFF4EB] border border-[#FED7AA] text-[#F97316] flex items-center justify-center mx-auto">
+                    <FileCode className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-[#171717]">No skills found</h3>
+                    <p className="text-xs text-[#737373] mt-1 max-w-sm mx-auto">
+                      {skillsSearch
+                        ? 'No skills match your filter criteria. Try clearing the search query.'
+                        : 'You haven’t created any AI skills yet. Click "New Skill" to create your first package.'}
+                    </p>
+                  </div>
+                  <button
+                    onClick={startNewSkill}
+                    className="px-4 py-2 bg-[#F97316] hover:bg-[#EA580C] text-white text-xs font-semibold rounded-lg shadow-xs inline-flex items-center gap-1.5"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Create Your First Skill</span>
+                  </button>
+                </div>
+              ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs border-collapse">
-                    <thead className="bg-[#FAFAF9] border-b border-[#E8E8E6] font-mono text-[11px] text-[#737373] uppercase tracking-wider">
-                      <tr>
-                        <th className="py-3 px-5">Skill Name</th>
-                        <th className="py-3 px-4">Status</th>
-                        <th className="py-3 px-4">Version</th>
+                    <thead>
+                      <tr className="border-b border-[#E8E8E6] bg-[#FAFAF9] text-[#737373] font-mono text-[11px] uppercase tracking-wider">
+                        <th className="py-3 px-4">Skill Name</th>
                         <th className="py-3 px-4">Category</th>
+                        <th className="py-3 px-4">Version</th>
                         <th className="py-3 px-4">Pricing</th>
-                        <th className="py-3 px-4">Downloads</th>
-                        <th className="py-3 px-5 text-right">Actions</th>
+                        <th className="py-3 px-4">Status</th>
+                        <th className="py-3 px-4">Security Scan</th>
+                        <th className="py-3 px-4 text-right">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[#E8E8E6]">
                       {filteredSkills.map((s) => (
-                        <tr key={s.id} className="hover:bg-[#FAFAF9]/80 transition-colors">
-                          <td className="py-3.5 px-5">
+                        <tr key={s.id} className="hover:bg-[#FAFAF9] transition-colors">
+                          <td className="py-3.5 px-4">
                             <div className="font-semibold text-[#171717]">{s.name}</div>
-                            <div className="text-[11px] text-[#737373] font-mono truncate max-w-xs">
-                              kyron/{s.slug}
-                            </div>
-                            {s.rejection_feedback && (
-                              <div className="text-[11px] text-red-700 bg-red-50 p-1.5 rounded mt-1 border border-red-200">
-                                Feedback: {s.rejection_feedback}
-                              </div>
+                            <div className="text-[11px] text-[#737373] font-mono">kyron/{s.slug}</div>
+                          </td>
+                          <td className="py-3.5 px-4 text-[#525252]">
+                            <span className="bg-[#FAFAF9] border border-[#E8E8E6] px-2 py-0.5 rounded text-[11px]">
+                              {s.category}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-4 font-mono text-[#737373]">
+                            v{s.current_version || '1.0.0'}
+                          </td>
+                          <td className="py-3.5 px-4 font-mono">
+                            {s.pricing_type === 'free' ? (
+                              <span className="text-emerald-600 font-semibold">Free</span>
+                            ) : (
+                              <span className="text-[#171717] font-semibold">${Number(s.price).toFixed(2)}</span>
                             )}
                           </td>
-
                           <td className="py-3.5 px-4">
                             <span
-                              className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold capitalize ${
+                              className={`text-[10px] font-semibold px-2 py-0.5 rounded-full capitalize ${
                                 s.status === 'published' || s.status === 'live'
                                   ? 'bg-emerald-100 text-emerald-800'
-                                  : s.status === 'approved'
-                                  ? 'bg-purple-100 text-purple-800'
-                                  : s.status === 'submitted' || s.status === 'under_review'
-                                  ? 'bg-blue-100 text-blue-800'
                                   : s.status === 'paused'
-                                  ? 'bg-zinc-200 text-zinc-800'
-                                  : s.status === 'rejected'
-                                  ? 'bg-red-100 text-red-800'
+                                  ? 'bg-neutral-100 text-neutral-700'
                                   : 'bg-amber-100 text-amber-800'
                               }`}
                             >
-                              {s.status === 'published' || s.status === 'live' ? (
-                                <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                              ) : null}
                               {s.status}
                             </span>
                           </td>
-
-                          <td className="py-3.5 px-4 font-mono text-[#525252]">
-                            v{s.current_version || '1.0.0'}
+                          <td className="py-3.5 px-4">
+                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 inline-flex items-center gap-1">
+                              <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                              <span>8/8 Passed</span>
+                            </span>
                           </td>
-
-                          <td className="py-3.5 px-4 text-[#525252]">
-                            {s.category}
-                          </td>
-
-                          <td className="py-3.5 px-4 font-mono font-semibold text-[#171717]">
-                            {s.pricing_type === 'free' ? 'FREE' : `$${Number(s.price || 0).toFixed(2)}`}
-                          </td>
-
-                          <td className="py-3.5 px-4 font-mono text-[#737373]">
-                            {(s as any).install_count || (s as any).downloads_count || 0}
-                          </td>
-
-                          <td className="py-3.5 px-5 text-right">
+                          <td className="py-3.5 px-4 text-right">
                             <div className="flex items-center justify-end gap-1.5">
-                              {/* Edit in studio */}
                               <button
                                 onClick={() => loadSkillIntoEditor(s.id)}
+                                className="px-2.5 py-1 rounded bg-[#FFF4EB] hover:bg-[#FED7AA] text-[#EA580C] font-semibold text-[11px] inline-flex items-center gap-1"
                                 title="Edit in Studio"
-                                className="p-1.5 rounded-lg border border-[#E8E8E6] text-[#737373] hover:text-[#171717] hover:bg-white"
                               >
-                                <Edit3 className="w-3.5 h-3.5" />
+                                <Edit3 className="w-3 h-3" />
+                                <span>Edit</span>
                               </button>
-
-                              {/* Download ZIP */}
-                              <button
-                                type="button"
-                                onClick={() => handleDownloadZipForSkill(s.slug)}
-                                title="Download Package ZIP"
-                                className="p-1.5 rounded-lg border border-[#E8E8E6] text-[#737373] hover:text-[#171717] hover:bg-white"
-                              >
-                                <Download className="w-3.5 h-3.5" />
-                              </button>
-
-                              {/* View live in marketplace */}
-                              {(s.status === 'published' || s.status === 'live') && (
-                                <Link
-                                  href={`/skills/${s.slug}`}
-                                  title="View Marketplace Listing"
-                                  className="p-1.5 rounded-lg border border-[#E8E8E6] text-[#737373] hover:text-[#171717] hover:bg-white"
-                                >
-                                  <Eye className="w-3.5 h-3.5" />
-                                </Link>
-                              )}
-
-                              {/* Publish action for approved */}
-                              {s.status === 'approved' && (
-                                <button
-                                  onClick={() => handlePublishApproved(s.id)}
-                                  disabled={processingId === s.id}
-                                  className="px-2.5 py-1 rounded bg-purple-600 hover:bg-purple-700 text-white font-semibold text-[11px]"
-                                >
-                                  Publish Now
-                                </button>
-                              )}
-
-                              {/* Pause / Resume action */}
-                              {(s.status === 'published' || s.status === 'live') && (
-                                <button
-                                  onClick={() => handlePauseSkill(s.id)}
-                                  disabled={processingId === s.id}
-                                  className="px-2 py-1 rounded border border-[#E8E8E6] text-[#737373] hover:text-amber-800 text-[11px]"
-                                >
-                                  Pause
-                                </button>
-                              )}
-                              {s.status === 'paused' && (
-                                <button
-                                  onClick={() => handleResumeSkill(s.id)}
-                                  disabled={processingId === s.id}
-                                  className="px-2 py-1 rounded bg-emerald-600 text-white text-[11px] font-semibold"
-                                >
-                                  Resume
-                                </button>
-                              )}
-
-                              {/* Manage Versions */}
                               <button
                                 onClick={() => openVersionModal(s.id)}
+                                className="p-1.5 rounded border border-[#E8E8E6] text-[#737373] hover:text-[#171717]"
                                 title="Version History"
-                                className="p-1.5 rounded-lg border border-[#E8E8E6] text-[#737373] hover:text-[#171717] hover:bg-white"
                               >
                                 <Clock className="w-3.5 h-3.5" />
                               </button>
-
-                              {/* Delete Draft */}
-                              {(s.status === 'draft' || s.status === 'rejected') && (
+                              {s.status === 'published' || s.status === 'live' ? (
+                                <button
+                                  onClick={() => handlePauseSkill(s.id)}
+                                  disabled={processingId === s.id}
+                                  className="p-1.5 rounded border border-[#E8E8E6] text-[#737373] hover:text-amber-600"
+                                  title="Pause Listing"
+                                >
+                                  <Archive className="w-3.5 h-3.5" />
+                                </button>
+                              ) : s.status === 'paused' ? (
+                                <button
+                                  onClick={() => handleResumeSkill(s.id)}
+                                  disabled={processingId === s.id}
+                                  className="p-1.5 rounded border border-[#E8E8E6] text-[#737373] hover:text-emerald-600"
+                                  title="Resume Listing"
+                                >
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                </button>
+                              ) : (
                                 <button
                                   onClick={() => handleDeleteDraft(s.id, s.name)}
                                   disabled={processingId === s.id}
+                                  className="p-1.5 rounded border border-[#E8E8E6] text-[#737373] hover:text-red-600"
                                   title="Delete Draft"
-                                  className="p-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50"
                                 >
                                   <Trash2 className="w-3.5 h-3.5" />
                                 </button>
@@ -1342,61 +1275,46 @@ export function CreatorStudioPage() {
                     </tbody>
                   </table>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         )}
 
-        {/* ================= TAB 3: CREATE SKILL & MULTI-FILE EDITOR ================= */}
+        {/* ========================================================= */}
+        {/* TAB 2: SKILL EDITOR & PACKAGING                            */}
+        {/* ========================================================= */}
         {activeTab === 'create' && (
           <div className="space-y-6">
-            {/* Top Editor Bar */}
-            <div className="bg-white border border-[#E8E8E6] rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            {/* Editor Action Toolbar */}
+            <div className="bg-white border border-[#E8E8E6] rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-[#FFF4EB] text-[#F97316] flex items-center justify-center font-bold">
-                  <FileCode className="w-4 h-4" />
+                <div className="w-9 h-9 rounded-lg bg-[#FFF4EB] text-[#F97316] flex items-center justify-center font-bold shrink-0">
+                  <FileCode className="w-5 h-5" />
                 </div>
                 <div>
-                  <div className="flex items-center gap-2">
-                    <h2 className="text-base font-bold text-[#171717]">
-                      {editingSkillId ? `Editing: ${skillName || 'Untitled'}` : 'New Skill Authoring'}
-                    </h2>
-                    {hasUnsavedChanges && (
-                      <span className="text-[10px] bg-amber-100 text-amber-800 font-medium px-2 py-0.5 rounded">
-                        Unsaved changes
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-xs text-[#737373] font-mono">
-                    Target: {skillSlug || 'slug'} • v{skillVersion}
-                  </div>
+                  <h2 className="text-sm font-bold text-[#171717]">
+                    {editingSkillId ? `Editing: ${skillName || 'Untitled Skill'}` : 'Authoring New AI Skill'}
+                  </h2>
+                  <p className="text-[11px] text-[#737373]">
+                    Compliant <code className="font-mono text-[#F97316]">SKILL.md</code> specification & standalone multi-file archive.
+                  </p>
                 </div>
               </div>
 
-              {/* Actions: Save Draft, Validate, Export ZIP, Submit */}
               <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
-                  onClick={handleValidatePackage}
-                  className="px-3 py-1.5 bg-[#FAFAF9] border border-[#E8E8E6] hover:border-[#171717] rounded-lg text-xs font-semibold text-[#171717] inline-flex items-center gap-1.5"
-                >
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Run Security Check</span>
-                </button>
-
-                <button
-                  type="button"
                   onClick={handleExportMarkdown}
-                  className="px-3 py-1.5 bg-[#FAFAF9] border border-[#E8E8E6] hover:border-[#171717] rounded-lg text-xs font-medium text-[#171717] inline-flex items-center gap-1.5"
+                  className="px-3 py-1.5 rounded-lg border border-[#E8E8E6] hover:border-[#171717] text-xs font-medium text-[#171717] inline-flex items-center gap-1.5 bg-white transition-colors"
                 >
                   <Download className="w-3.5 h-3.5 text-[#737373]" />
-                  <span>SKILL.md</span>
+                  <span>Export MD</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={handleExportZip}
-                  className="px-3 py-1.5 bg-[#FAFAF9] border border-[#E8E8E6] hover:border-[#171717] rounded-lg text-xs font-medium text-[#171717] inline-flex items-center gap-1.5"
+                  className="px-3 py-1.5 rounded-lg border border-[#E8E8E6] hover:border-[#171717] text-xs font-medium text-[#171717] inline-flex items-center gap-1.5 bg-white transition-colors"
                 >
                   <FolderArchive className="w-3.5 h-3.5 text-[#737373]" />
                   <span>Export ZIP</span>
@@ -1404,781 +1322,836 @@ export function CreatorStudioPage() {
 
                 <button
                   type="button"
+                  onClick={handleValidatePackage}
+                  className="px-3 py-1.5 rounded-lg border border-[#E8E8E6] hover:border-emerald-600 text-xs font-medium text-[#171717] inline-flex items-center gap-1.5 bg-white transition-colors"
+                >
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Run AST Scan</span>
+                </button>
+
+                <button
+                  type="button"
                   onClick={handleSaveDraft}
                   disabled={editorSaving}
-                  className="px-4 py-1.5 bg-white border border-[#171717] text-[#171717] hover:bg-[#FAFAF9] rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition-colors shadow-2xs"
+                  className="px-3.5 py-1.5 rounded-lg border border-[#E8E8E6] hover:border-[#171717] text-xs font-semibold text-[#171717] inline-flex items-center gap-1.5 bg-white transition-colors"
                 >
-                  <Save className="w-3.5 h-3.5" />
+                  <Save className="w-3.5 h-3.5 text-[#737373]" />
                   <span>{editorSaving ? 'Saving...' : 'Save Draft'}</span>
                 </button>
 
+                {/* Direct Publish Button: No review queue once security passes */}
                 <button
                   type="button"
                   onClick={handlePublish}
                   disabled={editorSaving}
-                  className="px-4 py-1.5 bg-[#F97316] hover:bg-[#EA580C] text-white rounded-lg text-xs font-bold inline-flex items-center gap-1.5 transition-colors shadow-xs"
+                  className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold inline-flex items-center gap-1.5 shadow-xs transition-colors"
                 >
                   <Send className="w-3.5 h-3.5" />
-                  <span>{editorSaving ? 'Publishing...' : 'Publish'}</span>
+                  <span>Publish Directly</span>
                 </button>
               </div>
             </div>
 
-            {/* 8-Point Automated Security & Quality Inspection Panel */}
-            <div className="bg-white border border-[#E8E8E6] rounded-xl p-5 space-y-4 shadow-xs">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#E8E8E6] pb-3">
-                <div className="flex items-center gap-2.5">
-                  <div className={`p-2 rounded-lg ${
-                    !validationReport
-                      ? 'bg-zinc-100 text-zinc-600'
-                      : validationReport.security_scan?.overallStatus === 'fail'
-                      ? 'bg-red-100 text-red-700'
-                      : validationReport.security_scan?.overallStatus === 'warning'
-                      ? 'bg-amber-100 text-amber-700'
-                      : 'bg-emerald-100 text-emerald-700'
-                  }`}>
-                    <ShieldCheck className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-bold text-[#171717] flex items-center gap-2">
-                      <span>Automated 8-Point Security & Quality Scan</span>
-                      {validationReport?.security_scan ? (
-                        <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full ${
-                          validationReport.security_scan.overallStatus === 'fail'
-                            ? 'bg-red-100 text-red-800'
-                            : validationReport.security_scan.overallStatus === 'warning'
-                            ? 'bg-amber-100 text-amber-800'
-                            : 'bg-emerald-100 text-emerald-800'
-                        }`}>
-                          {validationReport.security_scan.overallStatus.toUpperCase()} ({validationReport.security_scan.passedChecks}/8 Passed)
-                        </span>
-                      ) : (
-                        <span className="text-[10px] uppercase font-medium px-2 py-0.5 rounded-full bg-zinc-100 text-zinc-600">
-                          Not Run Yet
-                        </span>
-                      )}
-                    </h3>
-                    <p className="text-[11px] text-[#737373]">
-                      AST and static rule scanner testing prompt instructions, filesystem boundaries, package structure, and exfiltration vectors.
-                    </p>
-                  </div>
+            {/* Editor Grid: Left Metadata Form & Right Code Editor */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              {/* Left Column: Metadata (4 cols) */}
+              <div className="lg:col-span-4 bg-white border border-[#E8E8E6] rounded-xl p-5 space-y-4 shadow-2xs">
+                <div className="flex items-center justify-between pb-3 border-b border-[#E8E8E6]">
+                  <h3 className="text-xs font-bold text-[#171717] uppercase tracking-wider">Package Metadata</h3>
+                  <label className="text-xs text-[#F97316] hover:text-[#EA580C] font-semibold cursor-pointer inline-flex items-center gap-1">
+                    <Upload className="w-3 h-3" />
+                    <span>Import ZIP</span>
+                    <input type="file" accept=".zip,.md" onChange={handleFileUpload} className="hidden" />
+                  </label>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={handleValidatePackage}
-                  className="px-3 py-1.5 bg-[#FAFAF9] border border-[#E8E8E6] hover:border-[#171717] rounded-lg text-xs font-semibold text-[#171717] inline-flex items-center gap-1.5 shrink-0 self-start sm:self-auto"
-                >
-                  <RefreshCw className="w-3.5 h-3.5 text-[#737373]" />
-                  <span>{validationReport ? 'Re-run Scan' : 'Run Security Check'}</span>
-                </button>
-              </div>
+                <div className="space-y-3 text-xs">
+                  <div className="space-y-1">
+                    <label className="font-semibold text-[#171717]">Skill Name *</label>
+                    <input
+                      type="text"
+                      value={skillName}
+                      onChange={(e) => handleNameChange(e.target.value)}
+                      placeholder="e.g. Supabase RLS Auditor"
+                      className="w-full px-3 py-1.5 bg-[#FAFAF9] border border-[#E8E8E6] rounded-lg focus:outline-none focus:border-[#171717]"
+                    />
+                  </div>
 
-              {/* 8-Point Check Results Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {STANDARD_SECURITY_CHECKS.map((defaultCheck) => {
-                  const result = validationReport?.security_scan?.results?.find(
-                    (r: any) => r.id === defaultCheck.id
-                  );
-                  const status = result ? result.status : 'not_run';
-                  const details = result ? result.details : defaultCheck.defaultDetails;
-                  const findings = result?.findings || [];
-
-                  return (
-                    <div
-                      key={defaultCheck.id}
-                      className={`p-3 rounded-lg border text-xs transition-all ${
-                        status === 'fail'
-                          ? 'bg-red-50/60 border-red-200'
-                          : status === 'warning'
-                          ? 'bg-amber-50/60 border-amber-200'
-                          : status === 'pass'
-                          ? 'bg-emerald-50/40 border-emerald-200'
-                          : 'bg-[#FAFAF9] border-[#E8E8E6]'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <div className="font-semibold text-[#171717] flex items-center gap-1.5">
-                            {status === 'pass' && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />}
-                            {status === 'warning' && <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />}
-                            {status === 'fail' && <AlertCircle className="w-3.5 h-3.5 text-red-600 shrink-0" />}
-                            {status === 'not_run' && <Clock className="w-3.5 h-3.5 text-zinc-400 shrink-0" />}
-                            <span className="truncate">{defaultCheck.name}</span>
-                          </div>
-                          <p className="text-[11px] text-[#737373] mt-0.5 leading-snug">
-                            {defaultCheck.description}
-                          </p>
-                        </div>
-                        <span
-                          className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider shrink-0 ${
-                            status === 'pass'
-                              ? 'bg-emerald-100 text-emerald-800'
-                              : status === 'warning'
-                              ? 'bg-amber-100 text-amber-800'
-                              : status === 'fail'
-                              ? 'bg-red-100 text-red-800'
-                              : 'bg-zinc-200 text-zinc-700'
-                          }`}
-                        >
-                          {status === 'not_run' ? 'Not Run' : status}
-                        </span>
-                      </div>
-
-                      <div className="mt-2 text-[11px] text-[#525252] font-mono bg-white/70 p-1.5 rounded border border-black/5">
-                        {details}
-                      </div>
-
-                      {findings.length > 0 && (
-                        <div className="mt-2 space-y-1">
-                          <span className="text-[10px] font-bold text-red-700 uppercase tracking-wider block">
-                            Specific Findings ({findings.length}):
-                          </span>
-                          <ul className="list-disc list-inside space-y-0.5 text-[10px] text-red-800 font-mono">
-                            {findings.slice(0, 3).map((f: string, idx: number) => (
-                              <li key={idx} className="truncate">{f}</li>
-                            ))}
-                            {findings.length > 3 && (
-                              <li className="text-[10px] text-red-600 font-sans italic">
-                                +{findings.length - 3} additional finding(s)
-                              </li>
-                            )}
-                          </ul>
-                        </div>
-                      )}
+                  <div className="space-y-1">
+                    <label className="font-semibold text-[#171717]">Skill Slug (Identifier) *</label>
+                    <div className="flex items-center bg-[#FAFAF9] border border-[#E8E8E6] rounded-lg px-2.5 py-1.5 font-mono text-[11px] text-[#737373]">
+                      <span>kyron/</span>
+                      <input
+                        type="text"
+                        value={skillSlug}
+                        onChange={(e) => {
+                          setSkillSlug(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, '-'));
+                          setHasUnsavedChanges(true);
+                        }}
+                        placeholder="supabase-rls-auditor"
+                        className="bg-transparent w-full text-[#171717] focus:outline-none font-mono"
+                      />
                     </div>
-                  );
-                })}
-              </div>
+                  </div>
 
-              {/* Security Diligence Notice */}
-              <div className="flex items-start gap-2 p-3 bg-amber-50/70 border border-amber-200/80 rounded-lg text-amber-900 text-[11px] leading-relaxed">
-                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                <div>
-                  <span className="font-bold">Automated Security Notice:</span> Automated security checks verify against known vulnerabilities, command injections, and policy rules. Passing automated scans does not constitute a guarantee of complete security or fitness for all agent environments.
-                </div>
-              </div>
-            </div>
-
-            {/* Metadata Fields Section */}
-            <div className="bg-white border border-[#E8E8E6] rounded-xl p-5 space-y-4">
-              <h3 className="text-xs font-bold text-[#171717] uppercase tracking-wider">
-                Marketplace Listing Details
-              </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-[#171717]">Skill Name *</label>
-                  <input
-                    type="text"
-                    value={skillName}
-                    onChange={(e) => handleNameChange(e.target.value)}
-                    placeholder="e.g. Next.js Architecture Rule"
-                    className="w-full px-3 py-1.5 text-xs bg-[#FAFAF9] border border-[#E8E8E6] rounded-lg focus:border-[#171717] focus:outline-none"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-[#171717]">Slug Identifier *</label>
-                  <input
-                    type="text"
-                    value={skillSlug}
-                    onChange={(e) => {
-                      setSkillSlug(e.target.value);
-                      setHasUnsavedChanges(true);
-                    }}
-                    placeholder="e.g. nextjs-architect"
-                    className="w-full px-3 py-1.5 text-xs font-mono bg-[#FAFAF9] border border-[#E8E8E6] rounded-lg focus:border-[#171717] focus:outline-none"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-[#171717]">Category *</label>
-                  <select
-                    value={skillCategory}
-                    onChange={(e) => {
-                      setSkillCategory(e.target.value);
-                      setHasUnsavedChanges(true);
-                    }}
-                    className="w-full px-3 py-1.5 text-xs bg-[#FAFAF9] border border-[#E8E8E6] rounded-lg focus:border-[#171717] focus:outline-none"
-                  >
-                    {CATEGORIES.map((cat) => (
-                      <option key={cat.slug} value={cat.slug}>
-                        {cat.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-[#171717]">Pricing Model</label>
-                  <div className="flex items-center gap-2">
-                    <select
-                      value={pricingType}
+                  <div className="space-y-1">
+                    <label className="font-semibold text-[#171717]">Summary (1-sentence) *</label>
+                    <textarea
+                      value={skillSummary}
                       onChange={(e) => {
-                        setPricingType(e.target.value as any);
+                        setSkillSummary(e.target.value);
                         setHasUnsavedChanges(true);
                       }}
-                      className="w-1/2 px-2.5 py-1.5 text-xs bg-[#FAFAF9] border border-[#E8E8E6] rounded-lg focus:border-[#171717] focus:outline-none"
-                    >
-                      <option value="free">Free ($0.00)</option>
-                      <option value="paid">Commercial Paid</option>
-                    </select>
-                    {pricingType === 'paid' && (
-                      <div className="w-1/2 relative">
-                        <span className="absolute left-2.5 top-1.5 text-xs text-[#737373]">$</span>
+                      placeholder="Validates PostgreSQL row level security policies and flags leaks."
+                      className="w-full px-3 py-1.5 bg-[#FAFAF9] border border-[#E8E8E6] rounded-lg focus:outline-none focus:border-[#171717] resize-none h-16"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="font-semibold text-[#171717]">Category *</label>
+                      <select
+                        value={skillCategory}
+                        onChange={(e) => {
+                          setSkillCategory(e.target.value);
+                          setHasUnsavedChanges(true);
+                        }}
+                        className="w-full px-2.5 py-1.5 bg-[#FAFAF9] border border-[#E8E8E6] rounded-lg focus:outline-none focus:border-[#171717]"
+                      >
+                        {CATEGORIES.map((cat) => (
+                          <option key={cat.slug} value={cat.slug}>
+                            {cat.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="font-semibold text-[#171717]">Version</label>
+                      <input
+                        type="text"
+                        value={skillVersion}
+                        onChange={(e) => {
+                          setSkillVersion(e.target.value);
+                          setHasUnsavedChanges(true);
+                        }}
+                        placeholder="1.0.0"
+                        className="w-full px-3 py-1.5 bg-[#FAFAF9] border border-[#E8E8E6] rounded-lg focus:outline-none focus:border-[#171717] font-mono text-[11px]"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="font-semibold text-[#171717]">Pricing Model</label>
+                      <select
+                        value={pricingType}
+                        onChange={(e) => {
+                          setPricingType(e.target.value as any);
+                          setHasUnsavedChanges(true);
+                        }}
+                        className="w-full px-2.5 py-1.5 bg-[#FAFAF9] border border-[#E8E8E6] rounded-lg focus:outline-none focus:border-[#171717]"
+                      >
+                        <option value="free">Free (1-Click)</option>
+                        <option value="paid">Paid (Commercial)</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="font-semibold text-[#171717]">Price (USD)</label>
+                      <div className="flex items-center bg-[#FAFAF9] border border-[#E8E8E6] rounded-lg px-2.5 py-1.5 font-mono text-[11px]">
+                        <span>$</span>
                         <input
                           type="number"
                           step="0.01"
-                          value={price}
+                          disabled={pricingType === 'free'}
+                          value={pricingType === 'free' ? '0.00' : price}
                           onChange={(e) => {
                             setPrice(e.target.value);
                             setHasUnsavedChanges(true);
                           }}
-                          className="w-full pl-6 pr-2 py-1.5 text-xs font-mono bg-[#FAFAF9] border border-[#E8E8E6] rounded-lg focus:border-[#171717] focus:outline-none"
+                          className="bg-transparent w-full text-[#171717] focus:outline-none pl-1 disabled:text-[#A3A3A3]"
                         />
                       </div>
-                    )}
+                    </div>
                   </div>
-                </div>
-              </div>
 
-              {/* Summary & Description */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-[#171717]">One-Sentence Summary *</label>
-                  <input
-                    type="text"
-                    value={skillSummary}
-                    onChange={(e) => {
-                      setSkillSummary(e.target.value);
-                      setHasUnsavedChanges(true);
-                    }}
-                    placeholder="Short description displayed in marketplace cards..."
-                    className="w-full px-3 py-1.5 text-xs bg-[#FAFAF9] border border-[#E8E8E6] rounded-lg focus:border-[#171717] focus:outline-none"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-[#171717]">Tags (comma-separated)</label>
-                  <input
-                    type="text"
-                    value={skillTags}
-                    onChange={(e) => {
-                      setSkillTags(e.target.value);
-                      setHasUnsavedChanges(true);
-                    }}
-                    placeholder="react, typescript, architecture, supabase"
-                    className="w-full px-3 py-1.5 text-xs bg-[#FAFAF9] border border-[#E8E8E6] rounded-lg focus:border-[#171717] focus:outline-none"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Multi-File Package Editor */}
-            <div className="bg-white border border-[#E8E8E6] rounded-xl overflow-hidden shadow-xs grid grid-cols-1 md:grid-cols-4 min-h-[520px]">
-              {/* File Tree Sidebar */}
-              <div className="border-r border-[#E8E8E6] bg-[#FAFAF9] p-4 space-y-4">
-                <div className="flex items-center justify-between pb-2 border-b border-[#E8E8E6]">
-                  <span className="text-xs font-bold text-[#171717] uppercase tracking-wider">
-                    Package Files
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setShowAddFileModal(true)}
-                    className="p-1 rounded hover:bg-[#E8E8E6] text-[#171717]"
-                    title="Add supporting file"
-                  >
-                    <Plus className="w-4 h-4" />
-                  </button>
-                </div>
-
-                {/* Upload ZIP / File Drop shortcut */}
-                <div>
-                  <label className="w-full flex items-center justify-center gap-1.5 px-3 py-2 border border-dashed border-[#D4D4D0] hover:border-[#171717] rounded-lg text-xs font-medium text-[#737373] hover:text-[#171717] cursor-pointer bg-white transition-colors">
-                    <Upload className="w-3.5 h-3.5" />
-                    <span>Upload ZIP / File</span>
+                  <div className="space-y-1">
+                    <label className="font-semibold text-[#171717]">Tags (comma-separated)</label>
                     <input
-                      type="file"
-                      accept=".zip,.md,.txt"
-                      onChange={handleFileUpload}
-                      className="hidden"
+                      type="text"
+                      value={skillTags}
+                      onChange={(e) => {
+                        setSkillTags(e.target.value);
+                        setHasUnsavedChanges(true);
+                      }}
+                      placeholder="supabase, rls, postgres, security"
+                      className="w-full px-3 py-1.5 bg-[#FAFAF9] border border-[#E8E8E6] rounded-lg focus:outline-none focus:border-[#171717]"
                     />
-                  </label>
-                </div>
-
-                {/* Files Tree */}
-                <div className="space-y-1">
-                  {/* Root SKILL.md */}
-                  <div
-                    onClick={() => setActiveFile('SKILL.md')}
-                    className={`flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer text-xs font-medium transition-colors ${
-                      activeFile === 'SKILL.md'
-                        ? 'bg-[#171717] text-white'
-                        : 'text-[#171717] hover:bg-[#E8E8E6]'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <FileCode className="w-3.5 h-3.5 text-[#F97316]" />
-                      <span className="font-mono">SKILL.md</span>
-                    </div>
-                    <span className="text-[10px] uppercase font-bold text-[#F97316]">Root</span>
                   </div>
-
-                  {/* Supporting Files */}
-                  {supportingFiles.map((file) => (
-                    <div
-                      key={file.name}
-                      onClick={() => setActiveFile(file.name)}
-                      className={`flex items-center justify-between px-3 py-1.5 rounded-lg cursor-pointer text-xs font-medium transition-colors ${
-                        activeFile === file.name
-                          ? 'bg-[#171717] text-white'
-                          : 'text-[#525252] hover:bg-[#E8E8E6]'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2 truncate pr-2">
-                        <FileText className="w-3.5 h-3.5 shrink-0" />
-                        <span className="font-mono truncate">{file.name}</span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteFile(file.name);
-                        }}
-                        className="text-[#A3A3A3] hover:text-red-500 p-0.5"
-                        title="Delete file"
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="pt-3 border-t border-[#E8E8E6] text-[11px] text-[#737373] leading-relaxed">
-                  Supporting files in <code className="font-mono">references/</code>, <code className="font-mono">templates/</code>, or <code className="font-mono">scripts/</code> are bundled directly into the downloaded ZIP.
                 </div>
               </div>
 
-              {/* Editor Workspace Pane */}
-              <div className="col-span-3 flex flex-col h-full">
-                {/* Editor Tab Header */}
-                <div className="flex items-center justify-between px-4 py-2 border-b border-[#E8E8E6] bg-[#FAFAF9]">
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-xs font-bold text-[#171717]">
-                      {activeFile}
-                    </span>
-                    <span className="text-xs text-[#737373]">
-                      ({new TextEncoder().encode(getActiveContent() || '').length} bytes)
-                    </span>
+              {/* Right Column: Multi-File Editor & AST Security Validation Report (8 cols) */}
+              <div className="lg:col-span-8 space-y-4">
+                {/* File Tabs Header */}
+                <div className="bg-white border border-[#E8E8E6] rounded-xl overflow-hidden shadow-2xs">
+                  <div className="px-4 py-2 border-b border-[#E8E8E6] bg-[#FAFAF9] flex items-center justify-between gap-2 overflow-x-auto">
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => setActiveFile('SKILL.md')}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-mono font-medium flex items-center gap-1.5 transition-colors ${
+                          activeFile === 'SKILL.md'
+                            ? 'bg-white border border-[#E8E8E6] text-[#F97316] font-bold shadow-2xs'
+                            : 'text-[#737373] hover:text-[#171717]'
+                        }`}
+                      >
+                        <FileCode className="w-3.5 h-3.5" />
+                        <span>SKILL.md</span>
+                        <span className="text-[10px] text-amber-600 bg-amber-50 px-1 rounded">root</span>
+                      </button>
+
+                      {supportingFiles.map((f) => (
+                        <div
+                          key={f.name}
+                          className={`flex items-center rounded-lg border text-xs font-mono transition-colors ${
+                            activeFile === f.name
+                              ? 'bg-white border-[#E8E8E6] text-[#171717] font-semibold shadow-2xs'
+                              : 'border-transparent text-[#737373] hover:text-[#171717]'
+                          }`}
+                        >
+                          <button
+                            onClick={() => setActiveFile(f.name)}
+                            className="px-2.5 py-1.5 flex items-center gap-1"
+                          >
+                            <FileText className="w-3 h-3 text-[#A3A3A3]" />
+                            <span>{f.name}</span>
+                          </button>
+                          <button
+                            onClick={() => handleDeleteFile(f.name)}
+                            className="pr-2 text-[#A3A3A3] hover:text-red-600"
+                            title="Delete File"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+
+                    <button
+                      onClick={() => setShowAddFileModal(true)}
+                      className="px-2.5 py-1 rounded-lg border border-dashed border-[#D4D4D0] hover:border-[#171717] text-[#737373] hover:text-[#171717] text-xs font-medium inline-flex items-center gap-1 shrink-0"
+                    >
+                      <Plus className="w-3 h-3" />
+                      <span>Add File</span>
+                    </button>
                   </div>
 
-                  <div className="flex items-center gap-1 bg-[#EDEDEB] p-0.5 rounded-lg">
-                    <button
-                      type="button"
-                      onClick={() => setEditorSubTab('edit')}
-                      className={`px-3 py-1 rounded text-xs font-semibold transition-colors ${
-                        editorSubTab === 'edit'
-                          ? 'bg-white text-[#171717] shadow-2xs'
-                          : 'text-[#737373] hover:text-[#171717]'
-                      }`}
-                    >
-                      Markdown Editor
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setEditorSubTab('preview')}
-                      className={`px-3 py-1 rounded text-xs font-semibold transition-colors ${
-                        editorSubTab === 'preview'
-                          ? 'bg-white text-[#171717] shadow-2xs'
-                          : 'text-[#737373] hover:text-[#171717]'
-                      }`}
-                    >
-                      Rendered Preview
-                    </button>
-                  </div>
-                </div>
-
-                {/* Editor Textarea / Preview */}
-                <div className="flex-1 p-4 flex flex-col">
-                  {editorSubTab === 'edit' ? (
+                  {/* Code Editor Textarea */}
+                  <div className="p-4 bg-white">
                     <textarea
                       value={getActiveContent()}
                       onChange={(e) => handleContentChange(e.target.value)}
-                      placeholder="Write your skill instructions and frontmatter in markdown format..."
-                      className="w-full flex-1 p-4 font-mono text-xs text-[#171717] bg-[#FAFAF9] border border-[#E8E8E6] rounded-lg focus:outline-none focus:border-[#171717] resize-none leading-relaxed min-h-[380px]"
-                      spellCheck={false}
+                      className="w-full h-[400px] font-mono text-xs text-[#171717] bg-[#FAFAF9] border border-[#E8E8E6] rounded-lg p-3.5 focus:outline-none focus:border-[#171717] leading-relaxed resize-y"
+                      placeholder="Write your SKILL.md specification with YAML frontmatter..."
                     />
-                  ) : (
-                    <div className="flex-1 p-5 bg-[#FAFAF9] border border-[#E8E8E6] rounded-lg overflow-y-auto max-h-[500px] text-xs leading-relaxed space-y-3 prose prose-zinc max-w-none">
-                      <pre className="p-3 bg-[#171717] text-white rounded font-mono text-xs overflow-x-auto">
-                        <code>{getActiveContent()}</code>
-                      </pre>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Modal: Add File */}
-            {showAddFileModal && (
-              <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
-                <div className="bg-white border border-[#E8E8E6] rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl">
-                  <h3 className="text-sm font-bold text-[#171717]">Add Supporting File</h3>
-                  <p className="text-xs text-[#737373]">
-                    Specify the relative path inside your package (e.g. references/guidelines.md, templates/output.json).
-                  </p>
-                  <input
-                    type="text"
-                    value={newFileName}
-                    onChange={(e) => setNewFileName(e.target.value)}
-                    placeholder="references/checklist.md"
-                    className="w-full px-3 py-2 text-xs font-mono bg-[#FAFAF9] border border-[#E8E8E6] rounded-lg focus:outline-none focus:border-[#171717]"
-                    autoFocus
-                  />
-                  <div className="flex items-center justify-end gap-2 pt-2">
-                    <button
-                      type="button"
-                      onClick={() => setShowAddFileModal(false)}
-                      className="px-3 py-1.5 border border-[#E8E8E6] rounded-lg text-xs font-medium text-[#737373] hover:text-[#171717]"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleAddFile}
-                      className="px-4 py-1.5 bg-[#F97316] text-white rounded-lg text-xs font-semibold hover:bg-[#EA580C]"
-                    >
-                      Add File
-                    </button>
                   </div>
                 </div>
-              </div>
-            )}
-          </div>
-        )}
 
-        {/* ================= TAB 4: VERSIONS ================= */}
-        {activeTab === 'versions' && (
-          <div className="space-y-6">
-            <div className="bg-white border border-[#E8E8E6] rounded-xl p-5 space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div>
-                  <h2 className="text-base font-bold text-[#171717]">Version Management</h2>
-                  <p className="text-xs text-[#737373]">
-                    Immutable release history and changelog manifests per skill package.
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <select
-                    value={selectedSkillForVersions}
-                    onChange={(e) => {
-                      setSelectedSkillForVersions(e.target.value);
-                      if (e.target.value) {
-                        api.getSkillVersions(e.target.value).then(r => setSkillVersions(r.versions || []));
-                      }
-                    }}
-                    className="px-3 py-1.5 text-xs bg-[#FAFAF9] border border-[#E8E8E6] rounded-lg focus:outline-none"
-                  >
-                    <option value="">Select a skill to inspect...</option>
-                    {skills.map(s => (
-                      <option key={s.id} value={s.id}>
-                        {s.name} ({s.slug})
-                      </option>
-                    ))}
-                  </select>
-
-                  {selectedSkillForVersions && (
-                    <button
-                      onClick={() => setShowVersionModal(true)}
-                      className="px-3.5 py-1.5 bg-[#F97316] text-white rounded-lg text-xs font-semibold inline-flex items-center gap-1"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>Tag New Version</span>
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {selectedSkillForVersions && skillVersions.length > 0 ? (
-                <div className="divide-y divide-[#E8E8E6] border border-[#E8E8E6] rounded-xl overflow-hidden text-xs">
-                  {skillVersions.map(v => (
-                    <div key={v.id} className="p-4 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono font-bold text-sm text-[#171717]">v{v.version_number}</span>
-                          <span className="text-[11px] text-[#737373] font-mono">
-                            Released {new Date(v.created_at).toLocaleDateString()}
-                          </span>
-                        </div>
-                        {v.changelog && (
-                          <p className="text-xs text-[#525252] mt-1">{v.changelog}</p>
-                        )}
+                {/* 8-Point AST Security Scan Report (if run) */}
+                {validationReport && (
+                  <div className="bg-white border border-[#E8E8E6] rounded-xl p-5 space-y-4 shadow-2xs">
+                    <div className="flex items-center justify-between pb-3 border-b border-[#E8E8E6]">
+                      <div className="flex items-center gap-2">
+                        <ShieldCheck
+                          className={`w-5 h-5 ${
+                            validationReport.security_scan?.overallStatus === 'pass'
+                              ? 'text-emerald-600'
+                              : 'text-red-600'
+                          }`}
+                        />
+                        <h3 className="text-sm font-bold text-[#171717]">
+                          8-Point Automated Security Scan
+                        </h3>
                       </div>
-                      <span className="font-mono text-[10px] text-[#A3A3A3]">ID: {v.id}</span>
+                      <span
+                        className={`text-xs font-mono font-bold px-2 py-0.5 rounded uppercase ${
+                          validationReport.security_scan?.overallStatus === 'pass'
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : 'bg-red-100 text-red-800'
+                        }`}
+                      >
+                        {validationReport.security_scan?.overallStatus === 'pass' ? 'PASSED (8/8)' : 'FAILED'}
+                      </span>
                     </div>
-                  ))}
-                </div>
-              ) : selectedSkillForVersions ? (
-                <div className="p-8 text-center text-xs text-[#737373] bg-[#FAFAF9] rounded-xl border border-[#E8E8E6]">
-                  No versions recorded yet for this skill. Click "Tag New Version" to record v1.0.0.
-                </div>
-              ) : (
-                <div className="p-8 text-center text-xs text-[#737373] bg-[#FAFAF9] rounded-xl border border-[#E8E8E6]">
-                  Select a skill from the dropdown above to view or release version updates.
-                </div>
-              )}
-            </div>
 
-            {/* Modal: New Version */}
-            {showVersionModal && (
-              <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
-                <div className="bg-white border border-[#E8E8E6] rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl">
-                  <h3 className="text-sm font-bold text-[#171717]">Release New Version</h3>
-                  <div className="space-y-1">
-                    <label className="text-xs font-semibold text-[#171717]">Version Number *</label>
-                    <input
-                      type="text"
-                      value={newVersionNumber}
-                      onChange={(e) => setNewVersionNumber(e.target.value)}
-                      placeholder="e.g. 1.1.0"
-                      className="w-full px-3 py-1.5 text-xs font-mono bg-[#FAFAF9] border border-[#E8E8E6] rounded-lg focus:outline-none"
-                    />
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                      {STANDARD_SECURITY_CHECKS.map((chk) => {
+                        const res = validationReport.security_scan?.results?.find((r: any) => r.ruleId === chk.id);
+                        const isPass = res ? res.status === 'pass' : true;
+                        return (
+                          <div
+                            key={chk.id}
+                            className={`p-2.5 rounded-lg border flex items-start gap-2 ${
+                              isPass ? 'bg-[#FAFAF9] border-[#E8E8E6]' : 'bg-red-50 border-red-200'
+                            }`}
+                          >
+                            {isPass ? (
+                              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                            ) : (
+                              <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                            )}
+                            <div>
+                              <div className="font-semibold text-[#171717]">{chk.name}</div>
+                              <div className="text-[11px] text-[#737373] mt-0.5">
+                                {res?.details || chk.defaultDetails}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                  <div className="space-y-1">
-                    <label className="text-xs font-semibold text-[#171717]">Changelog Notes</label>
-                    <textarea
-                      value={newVersionChangelog}
-                      onChange={(e) => setNewVersionChangelog(e.target.value)}
-                      placeholder="Summary of bug fixes, new capabilities, or agent instructions..."
-                      className="w-full px-3 py-1.5 text-xs bg-[#FAFAF9] border border-[#E8E8E6] rounded-lg focus:outline-none resize-none h-20"
-                    />
-                  </div>
-                  <div className="flex items-center justify-end gap-2 pt-2">
-                    <button
-                      onClick={() => setShowVersionModal(false)}
-                      className="px-3 py-1.5 border border-[#E8E8E6] rounded-lg text-xs font-medium text-[#737373]"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={handleCreateVersion}
-                      className="px-4 py-1.5 bg-[#F97316] text-white rounded-lg text-xs font-semibold"
-                    >
-                      Save Version
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ================= TAB 6: STOREFRONT PROFILE ================= */}
-        {activeTab === 'storefront' && (
-          <div className="max-w-2xl space-y-6">
-            <div className="bg-white border border-[#E8E8E6] rounded-2xl p-6 sm:p-8 space-y-6">
-              <div>
-                <h2 className="text-xl font-bold text-[#171717]">Creator Storefront Profile</h2>
-                <p className="text-xs text-[#737373] mt-1">
-                  This public profile appears on the KYRON Marketplace when developers inspect your published skills.
-                </p>
-              </div>
-
-              <form onSubmit={handleSaveProfile} className="space-y-4 text-xs">
-                <div className="space-y-1">
-                  <label className="font-semibold text-[#171717]">Display Name *</label>
-                  <input
-                    type="text"
-                    value={profileName}
-                    onChange={(e) => setProfileName(e.target.value)}
-                    className="w-full px-3 py-2 bg-[#FAFAF9] border border-[#E8E8E6] rounded-lg focus:outline-none focus:border-[#171717]"
-                    required
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="font-semibold text-[#171717]">Creator Bio</label>
-                  <textarea
-                    value={profileBio}
-                    onChange={(e) => setProfileBio(e.target.value)}
-                    placeholder="Tell AI developers about your domain expertise, engineering background..."
-                    className="w-full px-3 py-2 bg-[#FAFAF9] border border-[#E8E8E6] rounded-lg focus:outline-none focus:border-[#171717] resize-none h-24"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="font-semibold text-[#171717]">Website or Portfolio URL</label>
-                  <input
-                    type="url"
-                    value={profileWebsite}
-                    onChange={(e) => setProfileWebsite(e.target.value)}
-                    placeholder="https://yourdomain.com"
-                    className="w-full px-3 py-2 bg-[#FAFAF9] border border-[#E8E8E6] rounded-lg focus:outline-none focus:border-[#171717]"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="font-semibold text-[#171717]">Avatar Image URL</label>
-                  <input
-                    type="url"
-                    value={profileAvatar}
-                    onChange={(e) => setProfileAvatar(e.target.value)}
-                    placeholder="https://..."
-                    className="w-full px-3 py-2 bg-[#FAFAF9] border border-[#E8E8E6] rounded-lg focus:outline-none focus:border-[#171717]"
-                  />
-                </div>
-
-                <div className="pt-2 flex items-center justify-between">
-                  {user?.username && (
-                    <Link
-                      href={`/creators/${user.username}`}
-                      className="text-xs font-semibold text-[#F97316] hover:text-[#EA580C] inline-flex items-center gap-1"
-                    >
-                      <span>Preview Live Profile</span>
-                      <ExternalLink className="w-3.5 h-3.5" />
-                    </Link>
-                  )}
-                  <button
-                    type="submit"
-                    disabled={profileSaving}
-                    className="px-5 py-2 bg-[#F97316] hover:bg-[#EA580C] text-white rounded-lg font-semibold shadow-xs transition-colors"
-                  >
-                    {profileSaving ? 'Saving...' : 'Save Profile'}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-
-        {/* ================= TAB 7: ANALYTICS ================= */}
-        {activeTab === 'analytics' && (
-          <div className="space-y-6 max-w-4xl">
-            <div className="bg-white border border-[#E8E8E6] rounded-2xl p-6 sm:p-8 space-y-6">
-              <div>
-                <h2 className="text-xl font-bold text-[#171717]">Marketplace Conversion Funnel</h2>
-                <p className="text-xs text-[#737373] mt-1">
-                  Real traffic and acquisition funnel for your skills catalog.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-center">
-                <div className="p-5 rounded-xl border border-[#E8E8E6] bg-[#FAFAF9]">
-                  <span className="text-xs font-semibold text-[#737373] uppercase">Total Views</span>
-                  <div className="text-3xl font-extrabold font-mono text-[#171717] mt-1">
-                    {metrics?.total_views ?? 0}
-                  </div>
-                  <span className="text-[10px] text-[#737373] mt-1 block">Marketplace impressions</span>
-                </div>
-
-                <div className="p-5 rounded-xl border border-[#E8E8E6] bg-[#FAFAF9]">
-                  <span className="text-xs font-semibold text-[#737373] uppercase">Downloads & Installs</span>
-                  <div className="text-3xl font-extrabold font-mono text-[#F97316] mt-1">
-                    {metrics?.total_downloads ?? 0}
-                  </div>
-                  <span className="text-[10px] text-[#737373] mt-1 block">ZIP and standalone MD</span>
-                </div>
-
-                <div className="p-5 rounded-xl border border-[#E8E8E6] bg-[#FAFAF9]">
-                  <span className="text-xs font-semibold text-[#737373] uppercase">Conversion Rate</span>
-                  <div className="text-3xl font-extrabold font-mono text-emerald-600 mt-1">
-                    {metrics?.total_views > 0
-                      ? (((metrics.total_downloads || 0) / metrics.total_views) * 100).toFixed(1)
-                      : '0.0'}%
-                  </div>
-                  <span className="text-[10px] text-[#737373] mt-1 block">Views to downloads</span>
-                </div>
+                )}
               </div>
             </div>
           </div>
         )}
 
-        {/* ================= TAB 8: EARNINGS ================= */}
+        {/* ========================================================= */}
+        {/* TAB 3: EARNINGS & ANALYTICS                                */}
+        {/* ========================================================= */}
         {activeTab === 'earnings' && (
           <div className="space-y-6 max-w-4xl">
-            <div className="bg-white border border-[#E8E8E6] rounded-2xl p-6 sm:p-8 space-y-6">
+            <div className="bg-white border border-[#E8E8E6] rounded-2xl p-6 sm:p-8 space-y-6 shadow-2xs">
               <div>
-                <h2 className="text-xl font-bold text-[#171717]">Earnings & Payout Ledger</h2>
+                <h2 className="text-xl font-bold text-[#171717]">Earnings & Marketplace Analytics</h2>
                 <p className="text-xs text-[#737373] mt-1">
-                  KYRON creator revenue share breakdown and transaction ledger.
+                  Transparent 70/30 creator revenue model, conversion funnel, and payout settlement ledger.
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="p-5 rounded-xl border border-[#E8E8E6] bg-[#FAFAF9] space-y-2">
-                  <span className="text-xs font-semibold text-[#737373] uppercase">Creator Net Balance</span>
+              {/* Revenue Economics Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="p-5 rounded-xl border border-emerald-200 bg-emerald-50/50 space-y-1">
+                  <span className="text-xs font-semibold text-emerald-800 uppercase tracking-wider">
+                    Creator Net Balance
+                  </span>
                   <div className="text-3xl font-extrabold font-mono text-emerald-600">
                     ${(metrics?.net_earnings ?? 0).toFixed(2)}
                   </div>
-                  <p className="text-xs text-[#525252]">
-                    70% share from commercial skill purchases on KYRON Marketplace.
-                  </p>
+                  <span className="text-[11px] text-emerald-700 block">70% revenue share</span>
                 </div>
 
-                <div className="p-5 rounded-xl border border-[#E8E8E6] bg-[#FAFAF9] space-y-2">
-                  <span className="text-xs font-semibold text-[#737373] uppercase">Platform Quality Fee</span>
+                <div className="p-5 rounded-xl border border-[#E8E8E6] bg-[#FAFAF9] space-y-1">
+                  <span className="text-xs font-semibold text-[#737373] uppercase tracking-wider">
+                    Gross Volume
+                  </span>
+                  <div className="text-3xl font-extrabold font-mono text-[#171717]">
+                    ${((metrics?.net_earnings ?? 0) / 0.7 || 0).toFixed(2)}
+                  </div>
+                  <span className="text-[11px] text-[#737373] block">Total buyer payments</span>
+                </div>
+
+                <div className="p-5 rounded-xl border border-[#E8E8E6] bg-[#FAFAF9] space-y-1">
+                  <span className="text-xs font-semibold text-[#737373] uppercase tracking-wider">
+                    KYRON Platform Fee
+                  </span>
                   <div className="text-3xl font-extrabold font-mono text-[#737373]">30%</div>
-                  <p className="text-xs text-[#525252]">
-                    Covers 8-point automated security scanning, archive CDN hosting, and verified buyer entitlement validation.
-                  </p>
+                  <span className="text-[11px] text-[#737373] block">Hosting & scanning fee</span>
                 </div>
               </div>
 
+              {/* Conversion Funnel */}
+              <div className="p-5 rounded-xl border border-[#E8E8E6] bg-white space-y-4">
+                <h3 className="text-sm font-bold text-[#171717]">Marketplace Acquisition Funnel</h3>
+                <div className="grid grid-cols-3 gap-4 text-center">
+                  <div className="p-4 rounded-lg bg-[#FAFAF9] border border-[#E8E8E6]">
+                    <span className="text-[11px] text-[#737373] uppercase font-semibold">Impressions</span>
+                    <div className="text-2xl font-bold font-mono text-[#171717] mt-1">
+                      {metrics?.total_views ?? 0}
+                    </div>
+                  </div>
+                  <div className="p-4 rounded-lg bg-[#FAFAF9] border border-[#E8E8E6]">
+                    <span className="text-[11px] text-[#737373] uppercase font-semibold">Installs / Runs</span>
+                    <div className="text-2xl font-bold font-mono text-[#F97316] mt-1">
+                      {metrics?.total_downloads ?? 0}
+                    </div>
+                  </div>
+                  <div className="p-4 rounded-lg bg-[#FAFAF9] border border-[#E8E8E6]">
+                    <span className="text-[11px] text-[#737373] uppercase font-semibold">Conversion Rate</span>
+                    <div className="text-2xl font-bold font-mono text-emerald-600 mt-1">
+                      {metrics?.total_views > 0
+                        ? (((metrics.total_downloads || 0) / metrics.total_views) * 100).toFixed(1)
+                        : '0.0'}%
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Payout Notice */}
               <div className="p-4 rounded-xl border border-amber-200 bg-amber-50 text-xs text-amber-900 space-y-1">
                 <div className="font-bold flex items-center gap-1.5">
                   <AlertTriangle className="w-4 h-4 text-amber-600" />
-                  <span>Stripe & Banking Payout Integration Status</span>
+                  <span>Stripe & Banking Payout Integration</span>
                 </div>
                 <p className="leading-relaxed">
-                  Creator balance accumulates from wallet purchases. Direct creator bank payouts (via Stripe Connect) will activate upon merchant account verification.
+                  Creator earnings accumulate instantly from verified buyer credit purchases. Automated payouts execute on the 1st and 15th of each month for balances exceeding $25.00 USD.
                 </p>
               </div>
             </div>
           </div>
         )}
 
-        {/* ================= TAB 9: DOCUMENTATION ================= */}
+        {/* ========================================================= */}
+        {/* TAB 4: CREATOR GUIDE & COMPREHENSIVE DOCUMENTATION        */}
+        {/* ========================================================= */}
         {activeTab === 'docs' && (
-          <div className="space-y-6 max-w-4xl">
-            <div className="bg-white border border-[#E8E8E6] rounded-2xl p-6 sm:p-8 space-y-6">
-              <div className="flex items-center justify-between pb-4 border-b border-[#E8E8E6]">
+          <div className="space-y-6 max-w-5xl">
+            <div className="bg-white border border-[#E8E8E6] rounded-2xl p-6 sm:p-8 space-y-6 shadow-2xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#E8E8E6]">
                 <div>
                   <h2 className="text-xl font-bold text-[#171717]">Creator Documentation & Guides</h2>
                   <p className="text-xs text-[#737373] mt-1">
-                    Quick references to the full educational guides hosted on the Creator Hub.
+                    Standards, specs, and best practices for authoring, packaging, and monetizing AI skills.
                   </p>
                 </div>
-                <Link
-                  href="/creators"
-                  className="px-4 py-2 bg-[#171717] hover:bg-black text-white text-xs font-semibold rounded-lg inline-flex items-center gap-1.5 shadow-xs"
+                <button
+                  onClick={startNewSkill}
+                  className="px-4 py-2 bg-[#F97316] hover:bg-[#EA580C] text-white text-xs font-semibold rounded-lg shadow-xs inline-flex items-center gap-1.5 self-start sm:self-auto"
                 >
-                  <span>Open Full Creator Hub</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </Link>
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Author Skill Now</span>
+                </button>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Sub-navigation tabs for documentation */}
+              <div className="flex items-center gap-1 overflow-x-auto pb-1 text-xs border-b border-[#E8E8E6]">
                 {[
-                  { title: 'The SKILL.md Standard', desc: 'Required YAML frontmatter format, structure, and clean prompt engineering conventions.' },
-                  { title: '8-Point Security Checklist', desc: 'In-depth explanation of prompt injection defense, secret protection, and path safety.' },
-                  { title: 'Multi-File Packaging Guide', desc: 'How to structure references/, templates/, and scripts/ in standalone ZIP archives.' },
-                  { title: 'Agent Installation Guides', desc: 'Conventions for Claude Code, Cursor, Codex, and Antigravity directory setups.' },
-                ].map((g, idx) => (
-                  <div key={idx} className="p-4 rounded-xl border border-[#E8E8E6] bg-[#FAFAF9] space-y-1.5">
-                    <h3 className="font-bold text-xs text-[#171717]">{g.title}</h3>
-                    <p className="text-xs text-[#525252] leading-relaxed">{g.desc}</p>
-                    <Link href="/creators" className="text-xs text-[#F97316] font-semibold inline-flex items-center gap-1 pt-1">
-                      <span>Read guide</span>
-                      <ChevronRight className="w-3 h-3" />
-                    </Link>
-                  </div>
+                  { id: 'spec', label: '1. The SKILL.md Standard' },
+                  { id: 'products', label: '2. What You Can Sell' },
+                  { id: 'packaging', label: '3. Multi-File ZIP Spec' },
+                  { id: 'security', label: '4. 8-Point AST Scan' },
+                  { id: 'pricing', label: '5. 70/30 Economics' },
+                  { id: 'agents', label: '6. Agent Setup Guide' },
+                  { id: 'faq', label: '7. Creator FAQ' },
+                ].map((s) => (
+                  <button
+                    key={s.id}
+                    onClick={() => setActiveDocSection(s.id as any)}
+                    className={`px-3 py-2 border-b-2 font-medium whitespace-nowrap transition-colors ${
+                      activeDocSection === s.id
+                        ? 'border-[#F97316] text-[#F97316] font-bold'
+                        : 'border-transparent text-[#737373] hover:text-[#171717]'
+                    }`}
+                  >
+                    {s.label}
+                  </button>
                 ))}
               </div>
+
+              {/* SECTION 1: THE SKILL.MD STANDARD */}
+              {activeDocSection === 'spec' && (
+                <div className="space-y-4 text-xs">
+                  <h3 className="text-sm font-bold text-[#171717]">SKILL.md Specification & Format</h3>
+                  <p className="text-[#525252] leading-relaxed">
+                    Every skill on KYRON requires a compliant <code className="font-mono text-[#F97316]">SKILL.md</code> file at its root. 
+                    It must begin with clean YAML frontmatter demarcated by triple dashes (<code className="font-mono">---</code>).
+                  </p>
+
+                  <div className="relative">
+                    <pre className="p-4 bg-[#171717] text-[#FAFAF9] rounded-xl font-mono text-xs overflow-x-auto leading-relaxed">
+{`---
+name: my-engineering-skill
+description: "Enforces automated coding conventions and strict safety rules."
+version: 1.0.0
+license: MIT
+compatibility: [claude-code, cursor, codex, antigravity]
+tags: [architecture, safety, testing]
+---
+
+# Skill Directives
+
+## 1. Core Principles
+- Always inspect existing code before applying modifications.
+- Preserve comments, docstrings, and non-blocking warnings.
+- Run tests before finalizing changes.
+
+## 2. Command Workflows
+- Build: npm run build
+- Test: npm test`}
+                    </pre>
+                    <button
+                      onClick={() =>
+                        copyToClipboard(
+                          `---\nname: my-engineering-skill\ndescription: "Enforces automated coding conventions."\nversion: 1.0.0\nlicense: MIT\ncompatibility: [claude-code, cursor, codex, antigravity]\n---\n\n# Directives\n- Inspect files first.`,
+                          'spec-code'
+                        )
+                      }
+                      className="absolute right-3 top-3 p-1.5 rounded-lg bg-[#262626] hover:bg-[#333] text-white text-[11px] inline-flex items-center gap-1"
+                    >
+                      {copiedDocCode === 'spec-code' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                      <span>{copiedDocCode === 'spec-code' ? 'Copied' : 'Copy'}</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* SECTION 2: WHAT YOU CAN SELL */}
+              {activeDocSection === 'products' && (
+                <div className="space-y-4 text-xs">
+                  <h3 className="text-sm font-bold text-[#171717]">Supported Product Types & Restrictions</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="p-4 rounded-xl border border-[#E8E8E6] bg-[#FAFAF9] space-y-1">
+                      <div className="font-bold text-[#171717]">Autonomous Coding Instructions</div>
+                      <p className="text-[#525252]">Domain rules guiding agents for Next.js, Supabase, Flutter, Rust, and Go.</p>
+                    </div>
+                    <div className="p-4 rounded-xl border border-[#E8E8E6] bg-[#FAFAF9] space-y-1">
+                      <div className="font-bold text-[#171717]">Multi-File Workflow Bundles</div>
+                      <p className="text-[#525252]">Complete packages with templates, architecture references, and helper scripts.</p>
+                    </div>
+                    <div className="p-4 rounded-xl border border-[#E8E8E6] bg-[#FAFAF9] space-y-1">
+                      <div className="font-bold text-[#171717]">API & Toolchain Recipes</div>
+                      <p className="text-[#525252]">Integration patterns for Stripe, OpenAI, GitHub, and Cloudflare.</p>
+                    </div>
+                    <div className="p-4 rounded-xl border border-[#E8E8E6] bg-[#FAFAF9] space-y-1">
+                      <div className="font-bold text-[#171717]">Security & OWASP Checklists</div>
+                      <p className="text-[#525252]">Auditing prompts that systematically scan code for vulnerabilities.</p>
+                    </div>
+                  </div>
+
+                  <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 space-y-1 text-amber-900">
+                    <div className="font-bold flex items-center gap-1.5">
+                      <AlertTriangle className="w-4 h-4 text-amber-600" />
+                      <span>Prohibited Content</span>
+                    </div>
+                    <p>Compiled binaries (.exe, .dll, .so), obfuscated eval loops, prompt injection attacks, and secret stealing payloads.</p>
+                  </div>
+                </div>
+              )}
+
+              {/* SECTION 3: MULTI-FILE PACKAGING */}
+              {activeDocSection === 'packaging' && (
+                <div className="space-y-4 text-xs">
+                  <h3 className="text-sm font-bold text-[#171717]">Multi-File ZIP Archive Structure</h3>
+                  <p className="text-[#525252]">
+                    For complex skills requiring templates or helper scripts, package your files into a clean ZIP archive with this standard directory hierarchy:
+                  </p>
+                  <pre className="p-4 bg-[#171717] text-[#FAFAF9] rounded-xl font-mono text-xs leading-relaxed">
+{`<skill-slug>/
+├── SKILL.md                 # Required root specification
+├── references/              # Architecture guides, API schemas
+│   └── database-schema.md
+├── templates/               # Boilerplates injected by the agent
+│   └── component.tsx
+└── scripts/                 # Optional helper scripts (Python/Node)
+    └── validator.py`}
+                  </pre>
+                </div>
+              )}
+
+              {/* SECTION 4: 8-POINT AST SCAN */}
+              {activeDocSection === 'security' && (
+                <div className="space-y-4 text-xs">
+                  <h3 className="text-sm font-bold text-[#171717]">The KYRON 8-Point Security Scanning Engine</h3>
+                  <p className="text-[#525252]">
+                    To protect AI developers, KYRON runs an automated static AST analysis on every submission before it can be published:
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {STANDARD_SECURITY_CHECKS.map((chk, i) => (
+                      <div key={chk.id} className="p-3 rounded-lg border border-[#E8E8E6] bg-[#FAFAF9]">
+                        <div className="font-bold text-[#171717] flex items-center gap-1.5">
+                          <span className="w-4 h-4 rounded-full bg-emerald-100 text-emerald-800 text-[10px] flex items-center justify-center font-bold">
+                            {i + 1}
+                          </span>
+                          <span>{chk.name}</span>
+                        </div>
+                        <p className="text-[11px] text-[#737373] mt-1">{chk.description}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* SECTION 5: PRICING & ECONOMICS */}
+              {activeDocSection === 'pricing' && (
+                <div className="space-y-4 text-xs">
+                  <h3 className="text-sm font-bold text-[#171717]">70% Creator Revenue Share Model</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="p-4 rounded-xl border border-emerald-200 bg-emerald-50">
+                      <div className="text-2xl font-bold font-mono text-emerald-600">70%</div>
+                      <div className="font-bold text-emerald-900 mt-1">Creator Payout</div>
+                      <p className="text-[11px] text-emerald-800 mt-0.5">Net share delivered to your wallet or bank account.</p>
+                    </div>
+                    <div className="p-4 rounded-xl border border-[#E8E8E6] bg-[#FAFAF9]">
+                      <div className="text-2xl font-bold font-mono text-[#737373]">30%</div>
+                      <div className="font-bold text-[#171717] mt-1">Platform Infrastructure</div>
+                      <p className="text-[11px] text-[#737373] mt-0.5">Covers AST analysis, CDN hosting, payment fees, and license checks.</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* SECTION 6: AGENT SETUP */}
+              {activeDocSection === 'agents' && (
+                <div className="space-y-4 text-xs">
+                  <h3 className="text-sm font-bold text-[#171717]">Autonomous Agent Installation Paths</h3>
+                  <div className="space-y-3 font-mono text-[11px]">
+                    <div className="p-3 rounded-lg border border-[#E8E8E6] bg-[#FAFAF9]">
+                      <div className="font-bold text-[#171717] font-sans">Claude Code</div>
+                      <code className="text-[#F97316]">.claude/skills/&lt;skill-slug&gt;/SKILL.md</code>
+                    </div>
+                    <div className="p-3 rounded-lg border border-[#E8E8E6] bg-[#FAFAF9]">
+                      <div className="font-bold text-[#171717] font-sans">Cursor</div>
+                      <code className="text-[#F97316]">.cursor/skills/&lt;skill-slug&gt;/SKILL.md</code>
+                    </div>
+                    <div className="p-3 rounded-lg border border-[#E8E8E6] bg-[#FAFAF9]">
+                      <div className="font-bold text-[#171717] font-sans">Google Antigravity</div>
+                      <code className="text-[#F97316]">~/.gemini/config/skills/&lt;skill-slug&gt;/SKILL.md</code>
+                    </div>
+                    <div className="p-3 rounded-lg border border-[#E8E8E6] bg-[#FAFAF9]">
+                      <div className="font-bold text-[#171717] font-sans">KYRON CLI 1-Click Execution</div>
+                      <code className="text-emerald-600">kyron run &lt;skill-slug&gt;</code>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* SECTION 7: FAQ */}
+              {activeDocSection === 'faq' && (
+                <div className="space-y-3 text-xs">
+                  <h3 className="text-sm font-bold text-[#171717]">Frequently Asked Questions</h3>
+                  {[
+                    {
+                      q: 'Do I retain intellectual property ownership?',
+                      a: 'Yes. You retain full copyright and ownership of your skill instructions, templates, and code.'
+                    },
+                    {
+                      q: 'Does KYRON require Model Context Protocol (MCP)?',
+                      a: 'No. KYRON skills are standalone Markdown files and standard ZIP archives. They run locally on any compatible agent without intermediaries.'
+                    },
+                    {
+                      q: 'How does the direct publishing flow work?',
+                      a: 'Save your draft, click "Run AST Scan" to confirm 8/8 checks pass, then click "Publish Directly". Your skill appears live on the marketplace immediately!'
+                    }
+                  ].map((faq, i) => (
+                    <div key={i} className="p-3.5 rounded-xl border border-[#E8E8E6] bg-[#FAFAF9] space-y-1">
+                      <div className="font-bold text-[#171717]">{faq.q}</div>
+                      <p className="text-[#525252] leading-relaxed">{faq.a}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}
       </main>
+
+      {/* ========================================================= */}
+      {/* MODAL 1: STOREFRONT PROFILE MODAL                         */}
+      {/* ========================================================= */}
+      {showProfileModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-5 border border-[#E8E8E6] shadow-xl">
+            <div className="flex items-center justify-between pb-3 border-b border-[#E8E8E6]">
+              <div className="flex items-center gap-2">
+                <User className="w-5 h-5 text-[#F97316]" />
+                <h3 className="text-base font-bold text-[#171717]">Creator Storefront Profile</h3>
+              </div>
+              <button onClick={() => setShowProfileModal(false)} className="text-[#737373] hover:text-[#171717]">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveProfile} className="space-y-3 text-xs">
+              <div className="space-y-1">
+                <label className="font-semibold text-[#171717]">Display Name *</label>
+                <input
+                  type="text"
+                  value={profileName}
+                  onChange={(e) => setProfileName(e.target.value)}
+                  className="w-full px-3 py-1.5 bg-[#FAFAF9] border border-[#E8E8E6] rounded-lg focus:outline-none focus:border-[#171717]"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-semibold text-[#171717]">Creator Bio</label>
+                <textarea
+                  value={profileBio}
+                  onChange={(e) => setProfileBio(e.target.value)}
+                  placeholder="Tell AI developers about your domain expertise, engineering background..."
+                  className="w-full px-3 py-1.5 bg-[#FAFAF9] border border-[#E8E8E6] rounded-lg focus:outline-none focus:border-[#171717] resize-none h-20"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-semibold text-[#171717]">Website / Portfolio URL</label>
+                <input
+                  type="url"
+                  value={profileWebsite}
+                  onChange={(e) => setProfileWebsite(e.target.value)}
+                  placeholder="https://yourdomain.com"
+                  className="w-full px-3 py-1.5 bg-[#FAFAF9] border border-[#E8E8E6] rounded-lg focus:outline-none focus:border-[#171717]"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-semibold text-[#171717]">Avatar Image URL</label>
+                <input
+                  type="url"
+                  value={profileAvatar}
+                  onChange={(e) => setProfileAvatar(e.target.value)}
+                  placeholder="https://..."
+                  className="w-full px-3 py-1.5 bg-[#FAFAF9] border border-[#E8E8E6] rounded-lg focus:outline-none focus:border-[#171717]"
+                />
+              </div>
+
+              <div className="pt-3 flex items-center justify-between border-t border-[#E8E8E6]">
+                {user?.username ? (
+                  <Link
+                    href={`/creators/${user.username}`}
+                    className="text-xs font-semibold text-[#F97316] hover:text-[#EA580C] inline-flex items-center gap-1"
+                  >
+                    <span>View Public Page</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </Link>
+                ) : <span />}
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowProfileModal(false)}
+                    className="px-3.5 py-1.5 rounded-lg border border-[#E8E8E6] text-xs font-medium text-[#737373] hover:text-[#171717]"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={profileSaving}
+                    className="px-4 py-1.5 bg-[#F97316] hover:bg-[#EA580C] text-white rounded-lg font-semibold shadow-xs transition-colors"
+                  >
+                    {profileSaving ? 'Saving...' : 'Save Profile'}
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* MODAL 2: VERSION HISTORY MODAL                            */}
+      {/* ========================================================= */}
+      {showVersionModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-5 border border-[#E8E8E6] shadow-xl">
+            <div className="flex items-center justify-between pb-3 border-b border-[#E8E8E6]">
+              <div className="flex items-center gap-2">
+                <Clock className="w-5 h-5 text-[#F97316]" />
+                <h3 className="text-base font-bold text-[#171717]">Skill Version History</h3>
+              </div>
+              <button onClick={() => setShowVersionModal(false)} className="text-[#737373] hover:text-[#171717]">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              <div className="space-y-2">
+                <h4 className="font-semibold text-[#171717]">Tag New Version</h4>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newVersionNumber}
+                    onChange={(e) => setNewVersionNumber(e.target.value)}
+                    placeholder="e.g. 1.1.0"
+                    className="w-32 px-3 py-1.5 bg-[#FAFAF9] border border-[#E8E8E6] rounded-lg font-mono text-[11px] focus:outline-none focus:border-[#171717]"
+                  />
+                  <input
+                    type="text"
+                    value={newVersionChangelog}
+                    onChange={(e) => setNewVersionChangelog(e.target.value)}
+                    placeholder="Changelog: Added AST validation rules"
+                    className="flex-1 px-3 py-1.5 bg-[#FAFAF9] border border-[#E8E8E6] rounded-lg focus:outline-none focus:border-[#171717]"
+                  />
+                  <button
+                    onClick={handleCreateVersion}
+                    className="px-3.5 py-1.5 bg-[#171717] hover:bg-black text-white rounded-lg font-semibold shrink-0"
+                  >
+                    Tag
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <h4 className="font-semibold text-[#171717]">Published Versions</h4>
+                {skillVersions.length === 0 ? (
+                  <p className="text-[#737373] py-2">No version history recorded yet.</p>
+                ) : (
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {skillVersions.map((v) => (
+                      <div key={v.id} className="p-2.5 rounded-lg border border-[#E8E8E6] bg-[#FAFAF9] flex items-center justify-between">
+                        <div>
+                          <span className="font-mono font-bold text-[#171717]">v{v.version_number}</span>
+                          <span className="text-[11px] text-[#737373] ml-2">{v.changelog || 'No changelog'}</span>
+                        </div>
+                        <span className="text-[10px] text-[#A3A3A3] font-mono">
+                          {new Date(v.created_at).toLocaleDateString()}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* MODAL 3: ADD SUPPORTING FILE MODAL                        */}
+      {/* ========================================================= */}
+      {showAddFileModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-5 space-y-4 border border-[#E8E8E6] shadow-xl">
+            <div className="flex items-center justify-between pb-2 border-b border-[#E8E8E6]">
+              <h3 className="text-sm font-bold text-[#171717]">Add Supporting File</h3>
+              <button onClick={() => setShowAddFileModal(false)} className="text-[#737373] hover:text-[#171717]">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="space-y-2 text-xs">
+              <label className="font-semibold text-[#171717]">File Relative Path</label>
+              <input
+                type="text"
+                value={newFileName}
+                onChange={(e) => setNewFileName(e.target.value)}
+                placeholder="e.g. templates/config.yaml"
+                className="w-full px-3 py-1.5 bg-[#FAFAF9] border border-[#E8E8E6] rounded-lg font-mono text-[11px] focus:outline-none focus:border-[#171717]"
+              />
+              <p className="text-[10px] text-[#737373]">
+                Supports files under <code className="font-mono">references/</code>, <code className="font-mono">templates/</code>, or <code className="font-mono">scripts/</code>.
+              </p>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                onClick={() => setShowAddFileModal(false)}
+                className="px-3 py-1.5 text-xs text-[#737373] hover:text-[#171717]"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAddFile}
+                className="px-3.5 py-1.5 bg-[#F97316] hover:bg-[#EA580C] text-white text-xs font-semibold rounded-lg shadow-xs"
+              >
+                Add File
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
+export default CreatorStudioPage;

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useRouter, Link } from '../context/RouterContext.tsx';
 import { useAuth } from '../context/AuthContext.tsx';
 import { CommandPalette } from './CommandPalette.tsx';
+import { KyronWordmark } from './KyronWordmark.tsx';
 import {
   Search,
   Bell,
@@ -35,7 +36,6 @@ function UserAvatar({ name, url, size = 'w-8 h-8' }: { name: string; url?: strin
 const baseNavLinks = [
   { label: 'Home', path: '/' },
   { label: 'Marketplace', path: '/marketplace' },
-  { label: 'Creator Hub', path: '/creators' },
   { label: 'Creator Studio', path: '/creator-studio' },
   { label: 'Dashboard', path: '/dashboard', authRequired: true },
   { label: 'Profile', path: '/profile', authRequired: true },
@@ -122,9 +122,7 @@ export function Navbar() {
                 alt="KYRON"
                 className="h-8 w-8 object-contain shrink-0 transition-transform duration-150 group-hover:scale-105"
               />
-              <span className="font-bold text-lg tracking-[0.12em] text-[#171717]">
-                KYR<span className="text-[#F97316]">O</span>N
-              </span>
+              <KyronWordmark className="h-5 w-auto text-[#171717]" />
             </Link>
 
             <nav className="hidden md:flex items-center gap-8" aria-label="Primary">

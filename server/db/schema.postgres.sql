@@ -260,3 +260,34 @@ CREATE INDEX IF NOT EXISTS idx_skill_downloads_user ON skill_downloads(user_id);
 CREATE INDEX IF NOT EXISTS idx_skill_submissions_skill ON skill_submissions(skill_id);
 CREATE INDEX IF NOT EXISTS idx_skill_submissions_status ON skill_submissions(status);
 CREATE INDEX IF NOT EXISTS idx_skill_versions_skill ON skill_versions(skill_id);
+
+CREATE TABLE IF NOT EXISTS skill_executions (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  skill_id TEXT REFERENCES skills(id) ON DELETE SET NULL,
+  skill_name TEXT NOT NULL,
+  command TEXT NOT NULL,
+  status TEXT NOT NULL,
+  latency_ms INTEGER NOT NULL,
+  tokens_consumed INTEGER DEFAULT 0,
+  payload_json TEXT,
+  executed_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_executions_user_time ON skill_executions(user_id, executed_at);
+
+CREATE TABLE IF NOT EXISTS api_keys (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  key_prefix TEXT NOT NULL,
+  key_hash TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  last_used_at TEXT,
+  revoked_at TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_api_keys_user ON api_keys(user_id);
+
+ALTER TABLE skill_executions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE api_keys ENABLE ROW LEVEL SECURITY;

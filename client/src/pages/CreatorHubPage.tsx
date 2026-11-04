@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter, Link } from '../context/RouterContext.tsx';
 import { useAuth } from '../context/AuthContext.tsx';
 import { loginPathFor } from '../utils/authHelpers.ts';
@@ -26,6 +26,13 @@ import {
 export function CreatorHubPage() {
   const { navigate } = useRouter();
   const { user } = useAuth();
+
+  // Seamlessly transition authenticated creators into the unified Creator Studio
+  useEffect(() => {
+    if (user) {
+      navigate('/creator-studio', { replace: true });
+    }
+  }, [user, navigate]);
 
   const [activeTab, setActiveTab] = useState<
     'quickstart' | 'what-to-sell' | 'format-spec' | 'packaging' | 'validation' | 'pricing' | 'agents' | 'faq'

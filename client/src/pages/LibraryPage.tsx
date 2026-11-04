@@ -31,127 +31,52 @@ export function LibraryPage() {
   const [disconnectModalSkill, setDisconnectModalSkill] = useState<InstalledSkillItem | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [daemonConfigOpen, setDaemonConfigOpen] = useState(false);
-  const [purchases, setPurchases] = useState<UserPurchase[]>([]);
+  const [, setPurchases] = useState<UserPurchase[]>([]);
+  const [skills, setSkills] = useState<InstalledSkillItem[]>([]);
+  const [apiKeys, setApiKeys] = useState<ApiKeyItem[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Default provisioned skills
-  const [skills, setSkills] = useState<InstalledSkillItem[]>([
-    {
-      id: '1',
-      name: 'OctoCode Architect',
-      slug: 'octocode-architect',
-      version: 'v2.4.1',
-      provider: '@axiom_labs',
-      avatar: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=100&auto=format&fit=crop&q=80',
-      status: 'ACTIVE',
-      latency: '68ms',
-      category: 'Code Intelligence',
-      transport: 'stdio',
-      endpoint: 'kyron://node-01/ast-transpiler',
-      licenseKey: 'ky_lic_octo_998124_live_enterprise'
-    },
-    {
-      id: '2',
-      name: 'SchemaForge DB Migration',
-      slug: 'schemaforge-db-migration',
-      version: 'v1.9.0',
-      provider: '@axiom_labs',
-      avatar: 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=100&auto=format&fit=crop&q=80',
-      status: 'ACTIVE',
-      latency: '92ms',
-      category: 'Database & Migrations',
-      transport: 'stdio',
-      endpoint: 'kyron://node-01/schemaforge',
-      licenseKey: 'ky_lic_forge_110293_live_enterprise'
-    },
-    {
-      id: '3',
-      name: 'VectorData Pipeline Engine',
-      slug: 'vectordata-pipeline-engine',
-      version: 'v2.1.0',
-      provider: '@axiom_labs',
-      avatar: 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=100&auto=format&fit=crop&q=80',
-      status: 'IDLE',
-      latency: '114ms',
-      category: 'Database & Migrations',
-      transport: 'SSE',
-      endpoint: 'http://127.0.0.1:8421/mcp/vectordata',
-      licenseKey: 'ky_lic_vdata_882109_live_enterprise'
-    },
-    {
-      id: '4',
-      name: 'Sentinel Security Auditor',
-      slug: 'sentinel-security-auditor',
-      version: 'v3.0.4',
-      provider: '@axiom_labs',
-      avatar: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=100&auto=format&fit=crop&q=80',
-      status: 'ACTIVE',
-      latency: '45ms',
-      category: 'Security & Compliance',
-      transport: 'stdio',
-      endpoint: 'kyron://node-01/sentinel-sec',
-      licenseKey: 'ky_lic_snt_449102_live_enterprise'
-    },
-    {
-      id: '5',
-      name: 'SEC Filing Synthesis MCP',
-      slug: 'sec-filing-financial-synthesis-mcp',
-      version: 'v1.2.0',
-      provider: '@axiom_labs',
-      avatar: 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=100&auto=format&fit=crop&q=80',
-      status: 'UPDATE',
-      latency: '180ms',
-      category: 'Code Intelligence',
-      transport: 'stdio',
-      endpoint: 'kyron://node-01/sec-synthesis',
-      licenseKey: 'ky_lic_sec_330192_live_enterprise'
-    },
-    {
-      id: '6',
-      name: 'Browserbase Headless Computer Use',
-      slug: 'browserbase-headless-computer-use',
-      version: 'v1.8.4',
-      provider: '@axiom_labs',
-      avatar: 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=100&auto=format&fit=crop&q=80',
-      status: 'ACTIVE',
-      latency: '240ms',
-      category: 'DevOps & Infra',
-      transport: 'SSE',
-      endpoint: 'http://127.0.0.1:8421/mcp/browserbase',
-      licenseKey: 'ky_lic_bb_772019_live_enterprise'
-    }
-  ]);
-
-  // Default API keys
-  const [apiKeys, setApiKeys] = useState<ApiKeyItem[]>([
-    {
-      id: 'key_1',
-      name: 'Production Serverless AST Worker',
-      key_prefix: 'ky_live_89x204',
-      created_at: '2025-10-14',
-      last_used: '3 mins ago'
-    },
-    {
-      id: 'key_2',
-      name: 'Local Cursor & Claude MCP Bridge',
-      key_prefix: 'ky_live_11a882',
-      created_at: '2025-10-18',
-      last_used: 'Just now'
-    },
-    {
-      id: 'key_3',
-      name: 'CI/CD Automated Security Auditing',
-      key_prefix: 'ky_live_04f931',
-      created_at: '2025-10-20',
-      last_used: '2 hours ago'
-    }
-  ]);
+  // Key creation state
+  const [createKeyModalOpen, setCreateKeyModalOpen] = useState(false);
+  const [newKeyName, setNewKeyName] = useState('');
+  const [createdSecretKey, setCreatedSecretKey] = useState<string | null>(null);
+  const [isGeneratingKey, setIsGeneratingKey] = useState(false);
 
   useEffect(() => {
-    api.getMyLibrary().then(res => {
-      if (res && res.purchases) {
-        setPurchases(res.purchases);
+    let mounted = true;
+    Promise.all([
+      api.getMyLibrary().catch(() => ({ purchases: [] as UserPurchase[] })),
+      api.getApiKeys().catch(() => ({ keys: [] as ApiKeyItem[] }))
+    ]).then(([libraryRes, keysRes]) => {
+      if (!mounted) return;
+      if (libraryRes && libraryRes.purchases) {
+        setPurchases(libraryRes.purchases);
+        const mapped: InstalledSkillItem[] = libraryRes.purchases.map(p => ({
+          id: p.id,
+          name: p.skill_name || 'Autonomous Skill',
+          slug: p.skill_slug || '',
+          version: p.current_version ? `v${p.current_version}` : 'v1.0.0',
+          provider: p.creator_name ? `@${p.creator_name.toLowerCase().replace(/\s+/g, '_')}` : '@creator',
+          avatar: p.logo_url || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=100&auto=format&fit=crop&q=80',
+          status: 'ACTIVE',
+          latency: 'Nominal',
+          category: p.skill_category || 'General',
+          transport: 'stdio',
+          endpoint: `kyron://skills/${p.skill_slug || p.skill_id}`,
+          licenseKey: p.license_key || 'KYRON-ACTIVE'
+        }));
+        setSkills(mapped);
       }
-    }).catch(() => {});
+      if (keysRes && keysRes.keys) {
+        setApiKeys(keysRes.keys);
+      }
+    }).finally(() => {
+      if (mounted) setLoading(false);
+    });
+
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   const copyToClipboard = (text: string, id: string) => {
@@ -164,13 +89,39 @@ export function LibraryPage() {
     setSyncing(true);
     setTimeout(() => {
       setSyncing(false);
-    }, 1200);
+    }, 800);
   };
 
   const handleDisconnect = () => {
     if (disconnectModalSkill) {
       setSkills(skills.filter(s => s.id !== disconnectModalSkill.id));
       setDisconnectModalSkill(null);
+    }
+  };
+
+  const handleGenerateKey = async () => {
+    if (isGeneratingKey) return;
+    setIsGeneratingKey(true);
+    try {
+      const res = await api.createApiKey(newKeyName.trim() || 'Personal Agent Key');
+      if (res?.api_key) {
+        setCreatedSecretKey(res.api_key.secret_key);
+        setApiKeys(prev => [res.api_key, ...prev]);
+        setNewKeyName('');
+      }
+    } catch (err: any) {
+      console.error('Failed to create API key:', err);
+    } finally {
+      setIsGeneratingKey(false);
+    }
+  };
+
+  const handleRevokeKey = async (id: string) => {
+    try {
+      await api.revokeApiKey(id);
+      setApiKeys(prev => prev.filter(k => k.id !== id));
+    } catch (err: any) {
+      console.error('Failed to revoke API key:', err);
     }
   };
 
@@ -202,41 +153,36 @@ export function LibraryPage() {
               <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-border-subtle pb-6">
                 <div>
                   <div className="flex items-center gap-2 mb-1.5">
-                    <span className="text-label-sm font-code-sm text-primary tracking-wider uppercase font-semibold">
-                      KYRON NODE ENVIRONMENT
+                    <span className="text-label-sm font-code-sm text-primary-container tracking-wider uppercase font-semibold">
+                      KYRON WORKSPACE
                     </span>
                     <span className="text-border-strong">/</span>
                     <span className="text-label-sm font-code-sm text-text-tertiary">MANAGED REPOSITORY</span>
                   </div>
                   <h1 className="text-headline-lg font-headline-lg text-text-primary tracking-tight">My Library</h1>
                   <p className="text-body-md font-body-md text-text-secondary mt-1 max-w-2xl">
-                    Manage your provisioned autonomous tools, local MCP bindings, and active execution licenses.
+                    Manage your provisioned autonomous tools, local MCP bindings, and active execution keys for {user?.display_name || 'your node'}.
                   </p>
                 </div>
 
-                {/* Quick Actions / Sync Status */}
+                {/* Quick Actions */}
                 <div className="flex items-center gap-2">
                   <button 
                     onClick={handleSyncAll}
                     disabled={syncing}
-                    className="h-9 px-3 bg-bg-canvas border border-border-subtle rounded text-body-sm font-label-md text-text-primary flex items-center gap-2 hover:bg-bg-surface hover:border-border-strong transition-all"
+                    className="h-9 px-3.5 bg-bg-surface border border-border-subtle hover:border-border-strong text-text-primary rounded text-body-sm font-medium flex items-center gap-1.5 transition-colors disabled:opacity-50"
                   >
-                    <span className={`material-symbols-outlined text-text-secondary text-[18px] ${syncing ? 'animate-spin' : ''}`}>sync</span>
-                    <span>{syncing ? 'Syncing...' : 'Sync All MCP'}</span>
-                  </button>
-                  <button 
-                    onClick={() => setDaemonConfigOpen(true)}
-                    className="h-9 px-3 bg-bg-canvas border border-border-subtle rounded text-body-sm font-label-md text-text-primary flex items-center gap-2 hover:bg-bg-surface hover:border-border-strong transition-all"
-                  >
-                    <span className="material-symbols-outlined text-text-secondary text-[18px]">tune</span>
-                    <span>Daemon Config</span>
+                    <span className={`material-symbols-outlined text-[16px] ${syncing ? 'animate-spin' : ''}`}>
+                      sync
+                    </span>
+                    <span>{syncing ? 'Syncing...' : 'Sync Bindings'}</span>
                   </button>
                   <button 
                     onClick={() => navigate('/mcp')}
                     className="h-9 px-3.5 bg-primary-container hover:bg-accent-hover text-white rounded text-body-sm font-medium flex items-center gap-1.5 transition-all"
                   >
-                    <span className="material-symbols-outlined text-[16px]">add</span>
-                    <span>New Binding</span>
+                    <span className="material-symbols-outlined text-[16px]">add_link</span>
+                    <span>Connect MCP</span>
                   </button>
                 </div>
               </div>
@@ -273,20 +219,6 @@ export function LibraryPage() {
                   </button>
 
                   <button 
-                    onClick={() => setActiveTab('saved')}
-                    className={`pb-3 text-body-md font-headline-md font-medium flex items-center gap-2 whitespace-nowrap transition-colors ${
-                      activeTab === 'saved' 
-                        ? 'text-text-primary border-b-2 border-primary-container' 
-                        : 'text-text-secondary hover:text-text-primary border-b-2 border-transparent'
-                    }`}
-                  >
-                    <span>Saved for Later</span>
-                    <span className="text-code-sm font-code-sm px-1.5 py-0.5 rounded bg-bg-surface border border-border-subtle text-text-secondary">
-                      {skills.filter(s => s.status === 'IDLE').length}
-                    </span>
-                  </button>
-
-                  <button 
                     onClick={() => setActiveTab('keys')}
                     className={`pb-3 text-body-md font-headline-md font-medium flex items-center gap-2 whitespace-nowrap transition-colors ${
                       activeTab === 'keys' 
@@ -302,144 +234,110 @@ export function LibraryPage() {
                 </div>
 
                 <div className="hidden sm:flex items-center gap-2 pb-2 text-code-sm font-code-sm text-text-tertiary">
-                  <span>BINDINGS: 4 ACTIVE</span>
-                  <span>•</span>
-                  <span>STORAGE: 1.2 GB</span>
+                  <span>BINDINGS: {skills.length} ACTIVE</span>
                 </div>
               </div>
             </section>
 
-            {/* TAB: SKILLS (All, Running, Saved) */}
+            {/* TAB: SKILLS (All, Running) */}
             {activeTab !== 'keys' && (
               <>
                 {/* Filter & Query Control Rail */}
                 <section className="bg-bg-canvas border border-border-subtle rounded-xl p-3 flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
-                  {/* Search Box */}
                   <div className="relative flex-1 max-w-md">
                     <span className="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-text-tertiary text-[18px]">search</span>
                     <input 
+                      type="text" 
+                      placeholder="Search workspace skills..."
                       value={searchQuery}
                       onChange={e => setSearchQuery(e.target.value)}
-                      className="w-full pl-9 pr-3 h-9 bg-bg-surface border border-border-subtle rounded text-body-sm text-text-primary placeholder:text-text-tertiary focus:border-text-primary focus:ring-0" 
-                      placeholder="Filter by skill name, version, protocol..." 
-                      type="text"
+                      className="w-full h-9 pl-9 pr-3 rounded bg-bg-surface border border-border-subtle text-body-sm font-body-sm text-text-primary placeholder:text-text-tertiary focus:outline-hidden focus:border-border-strong"
                     />
-                  </div>
-
-                  {/* Dropdowns */}
-                  <div className="flex flex-wrap items-center gap-2.5">
-                    <div className="relative">
-                      <select 
-                        value={selectedCategory}
-                        onChange={e => setSelectedCategory(e.target.value)}
-                        className="h-9 pl-3 pr-8 bg-bg-surface border border-border-subtle rounded text-body-sm text-text-primary focus:border-text-primary focus:ring-0 appearance-none cursor-pointer"
-                      >
-                        <option value="ALL">Category: All Environments</option>
-                        <option value="Code Intelligence">Code Intelligence</option>
-                        <option value="Database & Migrations">Database & Migrations</option>
-                        <option value="DevOps & Infra">DevOps & Infra</option>
-                        <option value="Security & Compliance">Security & Compliance</option>
-                      </select>
-                      <span className="material-symbols-outlined absolute right-2 top-1/2 -translate-y-1/2 text-text-tertiary pointer-events-none text-[16px]">expand_more</span>
-                    </div>
-
-                    <div className="relative">
-                      <select 
-                        value={selectedStatus}
-                        onChange={e => setSelectedStatus(e.target.value)}
-                        className="h-9 pl-3 pr-8 bg-bg-surface border border-border-subtle rounded text-body-sm text-text-primary focus:border-text-primary focus:ring-0 appearance-none cursor-pointer"
-                      >
-                        <option value="ALL">Status: All Statuses</option>
-                        <option value="ACTIVE">Status: Active / Running</option>
-                        <option value="IDLE">Status: Idle</option>
-                        <option value="UPDATE">Status: Update Available</option>
-                      </select>
-                      <span className="material-symbols-outlined absolute right-2 top-1/2 -translate-y-1/2 text-text-tertiary pointer-events-none text-[16px]">expand_more</span>
-                    </div>
                   </div>
                 </section>
 
-                {/* Provisioned Skills List */}
-                <div className="flex flex-col gap-3">
-                  {filteredSkills.map(item => (
-                    <div 
-                      key={item.id}
-                      className="bg-bg-canvas border border-border-subtle rounded-xl p-5 hover:border-border-strong transition-all flex flex-col md:flex-row md:items-center justify-between gap-4 group"
-                    >
-                      {/* Left: Info */}
-                      <div className="flex items-start gap-3.5 min-w-0">
-                        <img 
-                          src={item.avatar} 
-                          alt={item.name} 
-                          className="w-10 h-10 rounded-lg object-cover border border-border-subtle shrink-0"
-                        />
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <h3 className="font-headline-md font-semibold text-text-primary text-body-md truncate">
-                              {item.name}
-                            </h3>
-                            <span className="font-code-sm text-[11px] text-text-tertiary">{item.version}</span>
-                            <span className="text-text-tertiary">•</span>
-                            <span className="font-code-sm text-[11px] text-text-secondary">{item.provider}</span>
+                {/* Skills List or Empty State */}
+                <div className="space-y-3">
+                  {loading ? (
+                    <div className="p-12 text-center text-text-tertiary font-code-sm border border-border-subtle rounded-xl">
+                      Loading your library...
+                    </div>
+                  ) : filteredSkills.length > 0 ? (
+                    filteredSkills.map(item => (
+                      <div 
+                        key={item.id} 
+                        className="bg-bg-canvas border border-border-subtle rounded-xl p-4 sm:p-5 hover:border-border-strong transition-all flex flex-col md:flex-row md:items-center justify-between gap-4 group"
+                      >
+                        <div className="flex items-start gap-4 min-w-0">
+                          <div className="w-10 h-10 rounded-lg bg-bg-surface border border-border-subtle flex items-center justify-center shrink-0 text-primary-container font-mono font-bold">
+                            <span className="material-symbols-outlined text-[20px]">terminal</span>
                           </div>
 
-                          <div className="flex items-center gap-3 mt-1.5 text-code-sm text-[11px] text-text-secondary flex-wrap">
-                            <span className="inline-flex items-center gap-1">
-                              <span className={`w-1.5 h-1.5 rounded-full ${
-                                item.status === 'ACTIVE' ? 'bg-status-success animate-pulse' : 
-                                item.status === 'UPDATE' ? 'bg-primary-container' : 'bg-text-tertiary'
-                              }`}></span>
-                              <span>{item.status}</span>
-                            </span>
-                            <span>•</span>
-                            <span>Latency: {item.latency}</span>
-                            <span>•</span>
-                            <span className="text-text-tertiary">Transport: {item.transport}</span>
-                            <span>•</span>
-                            <code className="text-text-primary bg-bg-surface px-1.5 py-0.5 rounded border border-border-subtle">
-                              {item.endpoint}
-                            </code>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h3 className="font-headline-md font-semibold text-text-primary text-body-md truncate">
+                                {item.name}
+                              </h3>
+                              <span className="text-code-sm font-code-sm text-text-tertiary text-xs">
+                                {item.version}
+                              </span>
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-code-sm font-medium uppercase tracking-wider bg-status-success/10 text-status-success border border-status-success/20">
+                                {item.status}
+                              </span>
+                            </div>
+
+                            <p className="text-body-sm text-text-secondary text-xs mt-1 truncate">
+                              Provider: <span className="font-medium text-text-primary">{item.provider}</span> • Category: <span className="capitalize">{item.category}</span>
+                            </p>
+
+                            <div className="flex items-center gap-2 mt-2 font-code-sm text-xs text-text-tertiary">
+                              <span className="material-symbols-outlined text-[14px]">terminal</span>
+                              <code className="bg-bg-surface px-1.5 py-0.5 rounded text-text-secondary text-[11px]">
+                                {item.endpoint}
+                              </code>
+                            </div>
                           </div>
                         </div>
+
+                        {/* Actions */}
+                        <div className="flex items-center gap-2 shrink-0 pt-2 md:pt-0 border-t md:border-t-0 border-border-subtle">
+                          <button 
+                            onClick={() => copyToClipboard(`kyron run ${item.slug}`, `cli-${item.id}`)}
+                            className="h-8 px-2.5 rounded bg-bg-surface border border-border-subtle hover:border-border-strong text-text-secondary hover:text-text-primary text-xs font-code-sm flex items-center gap-1 transition-colors"
+                            title="Copy Run Command"
+                          >
+                            <span className="material-symbols-outlined text-[14px]">content_copy</span>
+                            <span>{copiedKey === `cli-${item.id}` ? 'Copied' : 'Run Cmd'}</span>
+                          </button>
+
+                          <button 
+                            onClick={() => navigate(`/skills/${item.slug}`)}
+                            className="h-8 px-2.5 rounded bg-bg-canvas border border-border-subtle hover:bg-bg-surface text-text-secondary hover:text-text-primary text-body-sm transition-colors"
+                            title="View Details"
+                          >
+                            <span className="material-symbols-outlined text-[16px]">visibility</span>
+                          </button>
+                        </div>
                       </div>
-
-                      {/* Right: Actions */}
-                      <div className="flex items-center gap-2 shrink-0 pt-2 md:pt-0 border-t md:border-t-0 border-border-subtle">
-                        <button 
-                          onClick={() => copyToClipboard(`kyron install ${item.slug}`, `cli-${item.id}`)}
-                          className="h-8 px-2.5 rounded bg-bg-surface border border-border-subtle hover:border-border-strong text-text-secondary hover:text-text-primary text-xs font-code-sm flex items-center gap-1 transition-colors"
-                          title="Copy CLI command"
-                        >
-                          <span className="material-symbols-outlined text-[14px]">content_copy</span>
-                          <span>{copiedKey === `cli-${item.id}` ? 'Copied' : 'CLI'}</span>
-                        </button>
-
-                        <button 
-                          onClick={() => navigate('/chat')}
-                          className="h-8 px-3 rounded bg-bg-canvas border border-border-subtle hover:border-text-primary text-text-primary text-body-sm font-medium flex items-center gap-1.5 transition-colors"
-                        >
-                          <span className="material-symbols-outlined text-[15px]">play_arrow</span>
-                          <span>Run</span>
-                        </button>
-
-                        <button 
-                          onClick={() => navigate(`/skills/${item.slug}`)}
-                          className="h-8 px-2.5 rounded bg-bg-canvas border border-border-subtle hover:bg-bg-surface text-text-secondary hover:text-text-primary text-body-sm transition-colors"
-                          title="View Details"
-                        >
-                          <span className="material-symbols-outlined text-[16px]">visibility</span>
-                        </button>
-
-                        <button 
-                          onClick={() => setDisconnectModalSkill(item)}
-                          className="h-8 w-8 rounded bg-bg-canvas border border-border-subtle hover:border-status-error hover:text-status-error text-text-tertiary flex items-center justify-center transition-colors"
-                          title="Disconnect / Remove"
-                        >
-                          <span className="material-symbols-outlined text-[16px]">link_off</span>
-                        </button>
+                    ))
+                  ) : (
+                    <div className="border border-border-subtle border-dashed rounded-xl p-10 text-center bg-bg-surface/30 flex flex-col items-center justify-center">
+                      <div className="w-12 h-12 rounded-full bg-bg-surface border border-border-subtle flex items-center justify-center text-text-tertiary mb-3">
+                        <span className="material-symbols-outlined text-[24px]">folder_open</span>
                       </div>
+                      <h3 className="font-headline-md text-body-lg font-semibold text-text-primary">No skills in your library yet</h3>
+                      <p className="font-body-sm text-body-sm text-text-secondary mt-1 max-w-md">
+                        Install skills with 1-click from the KYRON marketplace to add them to your agent runtime.
+                      </p>
+                      <button 
+                        onClick={() => navigate('/skills')}
+                        className="mt-4 px-4 py-2 bg-primary-container hover:bg-accent-hover text-white rounded text-body-sm font-medium transition-colors inline-flex items-center gap-1.5"
+                      >
+                        <span className="material-symbols-outlined text-[16px]">storefront</span>
+                        <span>Browse Marketplace</span>
+                      </button>
                     </div>
-                  ))}
+                  )}
                 </div>
               </>
             )}
@@ -456,14 +354,8 @@ export function LibraryPage() {
                   </div>
                   <button 
                     onClick={() => {
-                      const newId = `key_${Date.now()}`;
-                      setApiKeys([...apiKeys, {
-                        id: newId,
-                        name: 'Ephemeral Agent Key',
-                        key_prefix: `ky_live_${Math.random().toString(36).substring(2, 8)}`,
-                        created_at: 'Just now',
-                        last_used: 'Never'
-                      }]);
+                      setCreatedSecretKey(null);
+                      setCreateKeyModalOpen(true);
                     }}
                     className="h-9 px-4 bg-primary-container hover:bg-accent-hover text-white rounded text-body-sm font-medium flex items-center gap-1.5 transition-all self-start md:self-auto"
                   >
@@ -477,44 +369,47 @@ export function LibraryPage() {
                     <thead>
                       <tr className="border-b border-border-subtle bg-bg-surface text-label-sm uppercase text-[11px] text-text-secondary tracking-wider font-semibold">
                         <th className="py-3 px-5">Key Name & Label</th>
-                        <th className="py-3 px-4">Key Value</th>
-                        <th className="py-3 px-4">Created</th>
-                        <th className="py-3 px-4">Last Invoked</th>
+                        <th className="py-3 px-4">Key Prefix</th>
+                        <th className="py-3 px-4">Created At</th>
                         <th className="py-3 px-5 text-right">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border-subtle font-code-sm text-code-sm">
-                      {apiKeys.map(key => (
-                        <tr key={key.id} className="hover:bg-bg-surface/50 transition-colors">
-                          <td className="py-3.5 px-5 font-body-md text-body-sm font-medium text-text-primary">
-                            {key.name}
-                          </td>
-                          <td className="py-3.5 px-4">
-                            <div className="inline-flex items-center gap-2 bg-bg-surface px-2 py-1 rounded border border-border-subtle text-text-secondary">
-                              <span>{key.key_prefix}••••••••••••••••</span>
+                      {apiKeys.length > 0 ? (
+                        apiKeys.map(key => (
+                          <tr key={key.id} className="hover:bg-bg-surface/50 transition-colors">
+                            <td className="py-3.5 px-5 font-body-md text-body-sm font-medium text-text-primary">
+                              {key.name}
+                            </td>
+                            <td className="py-3.5 px-4">
+                              <div className="inline-flex items-center gap-2 bg-bg-surface px-2 py-1 rounded border border-border-subtle text-text-secondary">
+                                <span>{key.key_prefix}••••••••••••••••</span>
+                              </div>
+                            </td>
+                            <td className="py-3.5 px-4 text-text-tertiary">
+                              {new Date(key.created_at).toLocaleDateString()}
+                            </td>
+                            <td className="py-3.5 px-5 text-right font-sans">
                               <button 
-                                onClick={() => copyToClipboard(`${key.key_prefix}_super_secret_token_live`, key.id)}
-                                className="text-text-tertiary hover:text-text-primary p-0.5"
-                                title="Copy Key"
+                                onClick={() => handleRevokeKey(key.id)}
+                                className="text-status-error hover:underline text-xs"
                               >
-                                <span className="material-symbols-outlined text-[13px]">
-                                  {copiedKey === key.id ? 'check' : 'content_copy'}
-                                </span>
+                                Revoke
                               </button>
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan={4} className="py-10 px-4 text-center text-text-tertiary font-sans">
+                            <div className="flex flex-col items-center justify-center gap-1">
+                              <span className="material-symbols-outlined text-[22px]">key</span>
+                              <span>No active API keys found.</span>
+                              <span className="text-xs text-text-tertiary">Generate a key to connect external agents with your Kyron workspace.</span>
                             </div>
                           </td>
-                          <td className="py-3.5 px-4 text-text-tertiary">{key.created_at}</td>
-                          <td className="py-3.5 px-4 text-text-secondary">{key.last_used}</td>
-                          <td className="py-3.5 px-5 text-right font-sans">
-                            <button 
-                              onClick={() => setApiKeys(apiKeys.filter(k => k.id !== key.id))}
-                              className="text-status-error hover:underline text-xs"
-                            >
-                              Revoke
-                            </button>
-                          </td>
                         </tr>
-                      ))}
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -525,80 +420,87 @@ export function LibraryPage() {
         </main>
       </div>
 
-      {/* Disconnect Dialog Modal */}
-      {disconnectModalSkill && (
-        <div className="fixed inset-0 z-50 bg-text-primary/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-bg-canvas border border-border-strong rounded-xl max-w-md w-full shadow-2xl p-6 space-y-4">
-            <div className="flex items-center gap-3 text-status-warning">
-              <span className="material-symbols-outlined text-[28px]">warning</span>
-              <h3 className="font-headline-md font-semibold text-text-primary text-body-lg">Disconnect Skill Binding?</h3>
-            </div>
-            <p className="font-body-md text-text-secondary text-body-sm leading-relaxed">
-              Are you sure you want to decouple <strong className="text-text-primary">{disconnectModalSkill.name}</strong> from your local runtime daemon? Agents attempting to execute this tool will return connection errors.
-            </p>
-            <div className="p-3 bg-bg-surface border border-border-subtle rounded-lg font-code-sm text-xs text-text-secondary">
-              Target Socket: <span className="text-text-primary font-medium">{disconnectModalSkill.endpoint}</span>
-            </div>
-            <div className="flex items-center justify-end gap-2.5 pt-2">
-              <button 
-                onClick={() => setDisconnectModalSkill(null)}
-                className="px-3.5 py-2 bg-bg-canvas border border-border-subtle hover:bg-bg-surface text-text-primary rounded text-body-sm font-medium transition-colors"
-              >
-                Cancel
-              </button>
-              <button 
-                onClick={handleDisconnect}
-                className="px-4 py-2 bg-status-error hover:bg-red-700 text-white rounded text-body-sm font-medium transition-colors"
-              >
-                Disconnect Binding
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Daemon Config Modal */}
-      {daemonConfigOpen && (
+      {/* Generate API Key Modal */}
+      {createKeyModalOpen && (
         <div className="fixed inset-0 z-50 bg-text-primary/40 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-bg-canvas border border-border-strong rounded-xl max-w-md w-full shadow-2xl p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-border-subtle pb-3">
               <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-primary-container text-[20px]">tune</span>
-                <h3 className="font-headline-md font-semibold text-text-primary">Local Daemon Settings</h3>
+                <span className="material-symbols-outlined text-primary-container text-[20px]">key</span>
+                <h3 className="font-headline-md font-semibold text-text-primary">
+                  {createdSecretKey ? 'API Key Created' : 'Generate New API Key'}
+                </h3>
               </div>
-              <button onClick={() => setDaemonConfigOpen(false)} className="text-text-tertiary hover:text-text-primary">
+              <button 
+                onClick={() => setCreateKeyModalOpen(false)} 
+                className="text-text-tertiary hover:text-text-primary"
+              >
                 <span className="material-symbols-outlined">close</span>
               </button>
             </div>
-            
-            <div className="space-y-3 font-body-sm text-body-sm">
-              <div>
-                <label className="block text-text-secondary font-medium mb-1">Local Port Binding</label>
-                <input 
-                  defaultValue="8421" 
-                  className="w-full h-9 px-3 bg-bg-surface border border-border-subtle rounded font-code-sm text-xs text-text-primary"
-                />
-              </div>
-              <div>
-                <label className="block text-text-secondary font-medium mb-1">Hermetic Sandbox Mode</label>
-                <select className="w-full h-9 px-3 bg-bg-surface border border-border-subtle rounded text-body-sm text-text-primary">
-                  <option>Tier 0 (Full Ephemeral Isolation)</option>
-                  <option>Tier 1 (Read-Only FS Access)</option>
-                </select>
-              </div>
-              <div className="p-3 bg-accent-tint/40 border border-primary-container/20 rounded-lg text-xs text-text-secondary">
-                Kyron Daemon is listening for incoming stdio/SSE socket connections on <code className="text-primary-container font-code-sm">127.0.0.1:8421</code>.
-              </div>
-            </div>
 
-            <div className="flex justify-end pt-2">
-              <button 
-                onClick={() => setDaemonConfigOpen(false)}
-                className="px-4 py-2 bg-primary-container hover:bg-accent-hover text-white rounded text-body-sm font-medium transition-colors"
-              >
-                Save Daemon Configuration
-              </button>
-            </div>
+            {createdSecretKey ? (
+              <div className="space-y-4">
+                <div className="p-3 bg-status-success/10 border border-status-success/30 rounded-lg text-xs text-status-success">
+                  Make sure to copy your API key now. You will not be able to see it again!
+                </div>
+                <div className="space-y-1">
+                  <label className="block text-xs font-medium text-text-secondary font-code-sm">YOUR API KEY</label>
+                  <div className="flex items-center gap-2">
+                    <input 
+                      readOnly 
+                      value={createdSecretKey}
+                      className="w-full h-9 px-3 bg-bg-surface border border-border-subtle rounded font-mono text-xs text-text-primary select-all"
+                    />
+                    <button 
+                      onClick={() => copyToClipboard(createdSecretKey, 'secret-key')}
+                      className="h-9 px-3 bg-primary-container text-white rounded text-xs font-medium shrink-0 flex items-center gap-1"
+                    >
+                      <span className="material-symbols-outlined text-[14px]">
+                        {copiedKey === 'secret-key' ? 'check' : 'content_copy'}
+                      </span>
+                      <span>{copiedKey === 'secret-key' ? 'Copied' : 'Copy'}</span>
+                    </button>
+                  </div>
+                </div>
+                <div className="flex justify-end pt-2">
+                  <button 
+                    onClick={() => setCreateKeyModalOpen(false)}
+                    className="px-4 py-2 bg-bg-surface border border-border-subtle hover:border-text-primary text-text-primary rounded text-body-sm font-medium transition-colors"
+                  >
+                    Done
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-medium text-text-secondary mb-1">Key Name / Label</label>
+                  <input 
+                    type="text" 
+                    placeholder="e.g. Cursor MCP Gateway or Production Agent"
+                    value={newKeyName}
+                    onChange={e => setNewKeyName(e.target.value)}
+                    className="w-full h-9 px-3 bg-bg-surface border border-border-subtle rounded text-body-sm text-text-primary focus:outline-hidden focus:border-border-strong"
+                  />
+                </div>
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  <button 
+                    onClick={() => setCreateKeyModalOpen(false)}
+                    className="px-3.5 py-2 bg-bg-canvas border border-border-subtle hover:bg-bg-surface text-text-primary rounded text-body-sm font-medium transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    onClick={handleGenerateKey}
+                    disabled={isGeneratingKey}
+                    className="px-4 py-2 bg-primary-container hover:bg-accent-hover text-white rounded text-body-sm font-medium transition-colors disabled:opacity-50"
+                  >
+                    {isGeneratingKey ? 'Generating...' : 'Create Secret Key'}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

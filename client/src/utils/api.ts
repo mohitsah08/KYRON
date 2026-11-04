@@ -1,4 +1,4 @@
-import { Skill, SkillDeal, CategoryCount, Profile, SecurityAuditRule, SkillReview, UserPurchase, CreatorAnalytics } from '../types.ts';
+import { Skill, SkillDeal, CategoryCount, Profile, SecurityAuditRule, SkillReview, UserPurchase, CreatorAnalytics, DashboardData, ApiKeyItem } from '../types.ts';
 
 const TOKEN_KEY = 'kyron_token';
 
@@ -180,6 +180,44 @@ export const api = {
 
   async getMyLibrary(): Promise<{ purchases: UserPurchase[] }> {
     return request('/api/purchases/library');
+  },
+
+  // Workspace Dashboard
+  async getDashboard(): Promise<DashboardData> {
+    return request('/api/dashboard');
+  },
+
+  async recordExecution(payload: {
+    skill_id?: string;
+    skill_name: string;
+    command: string;
+    status?: 'completed' | 'failed' | 'in_progress';
+    latency_ms: number;
+    tokens_consumed?: number;
+    payload?: any;
+  }): Promise<{ success: boolean; execution: any }> {
+    return request('/api/dashboard/executions', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  },
+
+  // User API Keys
+  async getApiKeys(): Promise<{ keys: ApiKeyItem[] }> {
+    return request('/api/dashboard/api-keys');
+  },
+
+  async createApiKey(name: string): Promise<{ success: boolean; api_key: ApiKeyItem & { secret_key: string } }> {
+    return request('/api/dashboard/api-keys', {
+      method: 'POST',
+      body: JSON.stringify({ name })
+    });
+  },
+
+  async revokeApiKey(id: string): Promise<{ success: boolean; message: string }> {
+    return request(`/api/dashboard/api-keys/${id}`, {
+      method: 'DELETE'
+    });
   },
 
   // Downloads & Installation Prompts

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from '../context/RouterContext.tsx';
+import { KyronWordmark } from './KyronWordmark.tsx';
 
 export function Footer() {
   return (
@@ -10,10 +11,8 @@ export function Footer() {
           <div className="space-y-4">
             <Link href="/" className="flex items-center gap-2.5">
               <img src="/logo.png" alt="KYRON Emblem" className="h-7 w-7 object-contain shrink-0" />
-              <div className="flex items-center gap-1.5">
-                <span className="font-bold text-base tracking-wider text-[#171717]">
-                  KYR<span className="text-[#F97316]">O</span>N
-                </span>
+              <div className="flex items-center gap-2">
+                <KyronWordmark className="h-4.5 w-auto text-[#171717]" />
                 <span className="text-[#A3A3A3] font-mono text-xs">// AGENTS</span>
               </div>
             </Link>

@@ -527,6 +527,32 @@ var UniversalDatabase = class {
           );
           CREATE INDEX IF NOT EXISTS idx_rate_limits_email_action ON auth_email_rate_limits(email_hash, action, created_at_ms);
           CREATE INDEX IF NOT EXISTS idx_rate_limits_ip ON auth_email_rate_limits(ip_address, created_at_ms);
+
+          CREATE TABLE IF NOT EXISTS skill_executions (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+            skill_id TEXT REFERENCES skills(id) ON DELETE SET NULL,
+            skill_name TEXT NOT NULL,
+            command TEXT NOT NULL,
+            status TEXT NOT NULL,
+            latency_ms INTEGER NOT NULL,
+            tokens_consumed INTEGER DEFAULT 0,
+            payload_json TEXT,
+            executed_at TEXT NOT NULL
+          );
+          CREATE INDEX IF NOT EXISTS idx_executions_user_time ON skill_executions(user_id, executed_at);
+
+          CREATE TABLE IF NOT EXISTS api_keys (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+            name TEXT NOT NULL,
+            key_prefix TEXT NOT NULL,
+            key_hash TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            last_used_at TEXT,
+            revoked_at TEXT
+          );
+          CREATE INDEX IF NOT EXISTS idx_api_keys_user ON api_keys(user_id);
         `);
       } catch {
       }
@@ -5376,6 +5402,7 @@ ${skill.description}`;
           };
         }
         case "execute_skill_workflow": {
+          const execStart = Date.now();
           const { command, skill_slug } = args;
           if (!command || typeof command !== "string") {
             return {
@@ -5505,6 +5532,31 @@ ${skill.description}`;
               }
             };
           }
+          if (context.user?.id) {
+            const latencyMs = Math.max(1, Date.now() - execStart);
+            const execId = `exec_${crypto7.randomUUID()}`;
+            const executedAt = (/* @__PURE__ */ new Date()).toISOString();
+            try {
+              await db.run(`
+                INSERT INTO skill_executions (
+                  id, user_id, skill_id, skill_name, command, status, latency_ms, tokens_consumed, payload_json, executed_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              `, [
+                execId,
+                context.user.id,
+                skill?.id || null,
+                skill?.name || "MCP Playbook",
+                trimmedCommand,
+                executionOutcome.execution_status === "completed" ? "completed" : "failed",
+                latencyMs,
+                Math.max(120, Math.floor(JSON.stringify(executionOutcome).length / 4)),
+                JSON.stringify(executionOutcome),
+                executedAt
+              ]);
+            } catch (logErr) {
+              console.warn("MCP execution logging notice:", logErr.message);
+            }
+          }
           return {
             response: {
               jsonrpc: "2.0",
@@ -5632,6 +5684,283 @@ router6.post("/", async (req, res) => {
 });
 var mcp_default = router6;
 
+// server/routes/dashboard.ts
+import { Router as Router7 } from "express";
+import crypto8 from "node:crypto";
+var router7 = Router7();
+function generateApiKey() {
+  const randomBytes = crypto8.randomBytes(24).toString("hex");
+  const key = `ky_live_${randomBytes}`;
+  const prefix = `ky_live_${randomBytes.slice(0, 6)}`;
+  const hash = crypto8.createHash("sha256").update(key).digest("hex");
+  return { key, prefix, hash };
+}
+router7.get("/", requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const activeSkills = await db.all(`
+      SELECT DISTINCT s.id, s.name, s.slug, s.summary, s.category, s.logo_url,
+             s.current_version, s.pricing_type, s.price, s.average_rating,
+             pr.display_name as creator_name, pr.username as creator_username
+      FROM (
+        SELECT skill_id FROM user_purchases WHERE user_id = ? AND status = 'completed'
+        UNION
+        SELECT id as skill_id FROM skills WHERE creator_id = ? AND status IN ('published', 'live', 'approved')
+      ) ws
+      JOIN skills s ON ws.skill_id = s.id
+      JOIN profiles pr ON s.creator_id = pr.id
+    `, [userId, userId]);
+    const activeSkillsCount = activeSkills.length;
+    const now = /* @__PURE__ */ new Date();
+    const startOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
+    const startOfPrevMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1)).toISOString();
+    const monthlyStats = await db.get(`
+      SELECT 
+        COUNT(*) as total_calls,
+        COALESCE(SUM(tokens_consumed), 0) as total_tokens
+      FROM skill_executions
+      WHERE user_id = ? AND executed_at >= ?
+    `, [userId, startOfMonth]);
+    const prevMonthStats = await db.get(`
+      SELECT COUNT(*) as total_calls
+      FROM skill_executions
+      WHERE user_id = ? AND executed_at >= ? AND executed_at < ?
+    `, [userId, startOfPrevMonth, startOfMonth]);
+    const monthlyCalls = monthlyStats ? Number(monthlyStats.total_calls) : 0;
+    const monthlyTokens = monthlyStats ? Number(monthlyStats.total_tokens) : 0;
+    const prevMonthlyCalls = prevMonthStats ? Number(prevMonthStats.total_calls) : 0;
+    let callsGrowthPercent = null;
+    if (prevMonthlyCalls > 0) {
+      callsGrowthPercent = Math.round((monthlyCalls - prevMonthlyCalls) / prevMonthlyCalls * 1e3) / 10;
+    }
+    const latencyStats = await db.get(`
+      SELECT 
+        ROUND(AVG(latency_ms)) as avg_latency,
+        COUNT(*) as sample_count
+      FROM skill_executions
+      WHERE user_id = ? AND status = 'completed' AND latency_ms > 0
+    `, [userId]);
+    const avgLatency = latencyStats && latencyStats.sample_count > 0 && latencyStats.avg_latency !== null ? Number(latencyStats.avg_latency) : null;
+    const sampleCount = latencyStats ? Number(latencyStats.sample_count) : 0;
+    const executionStats = await db.get(`
+      SELECT 
+        COUNT(*) as total_executions,
+        SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as successful_executions
+      FROM skill_executions
+      WHERE user_id = ?
+    `, [userId]);
+    const totalExecutions = executionStats ? Number(executionStats.total_executions) : 0;
+    const successfulExecutions = executionStats ? Number(executionStats.successful_executions) : 0;
+    let healthStatus;
+    let healthRate = null;
+    let healthDetails;
+    if (totalExecutions > 0) {
+      healthRate = Math.round(successfulExecutions / totalExecutions * 1e3) / 10;
+      healthStatus = `${healthRate.toFixed(1)}%`;
+      healthDetails = `${successfulExecutions} / ${totalExecutions} executions succeeded`;
+    } else {
+      healthStatus = "Workspace ready";
+      healthRate = null;
+      healthDetails = "Runtime ready for first execution";
+    }
+    const frequentlyInvoked = await db.all(`
+      SELECT 
+        s.id, s.name, s.slug, s.summary, s.category, s.current_version, s.pricing_type, s.price,
+        s.logo_url, s.average_rating, pr.display_name as creator_name, pr.username as creator_username,
+        COUNT(e.id) as invocation_count,
+        MAX(e.executed_at) as last_invoked_at
+      FROM (
+        SELECT skill_id FROM user_purchases WHERE user_id = ? AND status = 'completed'
+        UNION
+        SELECT id as skill_id FROM skills WHERE creator_id = ? AND status IN ('published', 'live', 'approved')
+      ) ws
+      JOIN skills s ON ws.skill_id = s.id
+      JOIN profiles pr ON s.creator_id = pr.id
+      LEFT JOIN skill_executions e ON e.skill_id = s.id AND e.user_id = ?
+      GROUP BY s.id, s.name, s.slug, s.summary, s.category, s.current_version, s.pricing_type, s.price, s.logo_url, s.average_rating, pr.display_name, pr.username
+      ORDER BY invocation_count DESC, s.name ASC
+      LIMIT 6
+    `, [userId, userId, userId]);
+    const recentActivity = await db.all(`
+      SELECT id, skill_name, command, status, latency_ms, tokens_consumed, executed_at, payload_json
+      FROM skill_executions
+      WHERE user_id = ?
+      ORDER BY executed_at DESC
+      LIMIT 10
+    `, [userId]);
+    const formattedActivity = recentActivity.map((act) => {
+      let payload = {};
+      if (act.payload_json) {
+        try {
+          payload = JSON.parse(act.payload_json);
+        } catch {
+        }
+      }
+      return {
+        id: act.id,
+        skillName: act.skill_name,
+        command: act.command,
+        status: act.status.toUpperCase(),
+        latency: `${act.latency_ms}ms`,
+        tokens: `${Number(act.tokens_consumed || 0).toLocaleString()} tok`,
+        timestamp: act.executed_at,
+        payload
+      };
+    });
+    res.json({
+      metrics: {
+        active_skills: {
+          count: activeSkillsCount,
+          slots_limit: null,
+          // Honest: no unbacked 20-slot entitlement
+          description: activeSkillsCount === 0 ? "No active skills installed" : `${activeSkillsCount} active workspace skill${activeSkillsCount === 1 ? "" : "s"}`
+        },
+        monthly_calls: {
+          total: monthlyCalls,
+          tokens: monthlyTokens,
+          growth_percent: callsGrowthPercent,
+          period: "current_calendar_month_utc"
+        },
+        average_latency: {
+          value_ms: avgLatency,
+          display: avgLatency !== null ? `${avgLatency} ms` : "--",
+          sample_count: sampleCount
+        },
+        system_health: {
+          status: healthStatus,
+          success_rate: healthRate,
+          details: healthDetails,
+          has_monitoring: totalExecutions > 0
+        }
+      },
+      frequently_invoked_skills: frequentlyInvoked.map((item) => ({
+        ...item,
+        price: Number(item.price || 0),
+        invocation_count: Number(item.invocation_count || 0)
+      })),
+      recent_activity: formattedActivity,
+      active_skills_list: activeSkills
+    });
+  } catch (err) {
+    console.error("Dashboard fetch error:", err.message);
+    res.status(500).json({ error: "Failed to load user workspace dashboard." });
+  }
+});
+router7.post("/executions", requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { skill_id, skill_name, command, status = "completed", latency_ms, tokens_consumed = 0, payload } = req.body;
+    if (!skill_name || !command || typeof latency_ms !== "number" || latency_ms < 0) {
+      res.status(400).json({ error: "Missing required fields: skill_name, command, and valid latency_ms." });
+      return;
+    }
+    const executionId = `exec_${crypto8.randomUUID()}`;
+    const executedAt = (/* @__PURE__ */ new Date()).toISOString();
+    const payloadJson = payload ? JSON.stringify(payload) : null;
+    await db.run(`
+      INSERT INTO skill_executions (
+        id, user_id, skill_id, skill_name, command, status, latency_ms, tokens_consumed, payload_json, executed_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      executionId,
+      userId,
+      skill_id || null,
+      skill_name,
+      command,
+      status,
+      Math.round(latency_ms),
+      Math.max(0, Math.round(Number(tokens_consumed) || 0)),
+      payloadJson,
+      executedAt
+    ]);
+    res.status(201).json({
+      success: true,
+      execution: {
+        id: executionId,
+        user_id: userId,
+        skill_id: skill_id || null,
+        skill_name,
+        command,
+        status,
+        latency_ms: Math.round(latency_ms),
+        tokens_consumed: Math.max(0, Math.round(Number(tokens_consumed) || 0)),
+        executed_at: executedAt
+      }
+    });
+  } catch (err) {
+    console.error("Record execution error:", err.message);
+    res.status(500).json({ error: "Failed to record execution log." });
+  }
+});
+router7.get("/api-keys", requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const keys = await db.all(`
+      SELECT id, name, key_prefix, created_at, last_used_at, revoked_at
+      FROM api_keys
+      WHERE user_id = ? AND revoked_at IS NULL
+      ORDER BY created_at DESC
+    `, [userId]);
+    res.json({ keys });
+  } catch (err) {
+    console.error("List API keys error:", err.message);
+    res.status(500).json({ error: "Failed to list API keys." });
+  }
+});
+router7.post("/api-keys", requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { name } = req.body;
+    const trimmedName = name && typeof name === "string" ? name.trim().slice(0, 80) : "Personal API Key";
+    const { key, prefix, hash } = generateApiKey();
+    const keyId = `key_${crypto8.randomUUID()}`;
+    const createdAt = (/* @__PURE__ */ new Date()).toISOString();
+    await db.run(`
+      INSERT INTO api_keys (id, user_id, name, key_prefix, key_hash, created_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `, [keyId, userId, trimmedName, prefix, hash, createdAt]);
+    res.status(201).json({
+      success: true,
+      api_key: {
+        id: keyId,
+        name: trimmedName,
+        key_prefix: prefix,
+        secret_key: key,
+        created_at: createdAt
+      }
+    });
+  } catch (err) {
+    console.error("Create API key error:", err.message);
+    res.status(500).json({ error: "Failed to create API key." });
+  }
+});
+router7.delete("/api-keys/:id", requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { id } = req.params;
+    const existing = await db.get(`
+      SELECT id, user_id FROM api_keys WHERE id = ?
+    `, [id]);
+    if (!existing) {
+      res.status(404).json({ error: "API key not found." });
+      return;
+    }
+    if (existing.user_id !== userId) {
+      res.status(403).json({ error: "Forbidden: You do not have permission to revoke this API key." });
+      return;
+    }
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    await db.run(`
+      UPDATE api_keys SET revoked_at = ? WHERE id = ? AND user_id = ?
+    `, [now, id, userId]);
+    res.json({ success: true, message: "API key revoked successfully." });
+  } catch (err) {
+    console.error("Revoke API key error:", err.message);
+    res.status(500).json({ error: "Failed to revoke API key." });
+  }
+});
+var dashboard_default = router7;
+
 // server/app.ts
 var app = express();
 app.use(cors());
@@ -5656,6 +5985,7 @@ app.use("/api/purchases", purchases_default);
 app.use("/api/credits", purchases_default);
 app.use("/api/creator", creator_default);
 app.use("/api/auth", auth_default);
+app.use("/api/dashboard", dashboard_default);
 app.use("/api/mcp", mcp_default);
 app.use("/mcp", mcp_default);
 var distClientPath = path2.resolve(process.cwd(), "dist/client");

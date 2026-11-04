@@ -3,6 +3,7 @@ import { useRouter, Link } from '../context/RouterContext.tsx';
 import { useAuth, AuthActionError, OAuthProvider } from '../context/AuthContext.tsx';
 import { supabase } from '../utils/supabase.ts';
 import { AuthLoadingScreen } from '../components/ProtectedRoute.tsx';
+import { KyronWordmark } from '../components/KyronWordmark.tsx';
 import {
   sanitizeRedirect,
   validateEmail,
@@ -313,9 +314,7 @@ function AuthShell({ children }: { children: React.ReactNode }) {
           <div className="bg-white border border-[#EDEDEB] rounded-2xl p-6 sm:p-8 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_-12px_rgba(0,0,0,0.08)]">
             <Link href="/" className="inline-flex items-center gap-2 mb-6 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[#F97316]/40">
               <img src="/logo.png" alt="" className="w-7 h-7 object-contain" />
-              <span className="font-bold text-base tracking-[0.12em] text-[#171717]">
-                KYR<span className="text-[#F97316]">O</span>N
-              </span>
+              <KyronWordmark className="h-5 w-auto text-[#171717]" />
             </Link>
             {children}
           </div>

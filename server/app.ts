@@ -9,6 +9,7 @@ import purchasesRouter from './routes/purchases.ts';
 import creatorRouter from './routes/creator.ts';
 import authRouter from './routes/auth.ts';
 import mcpRouter from './routes/mcp.ts';
+import dashboardRouter from './routes/dashboard.ts';
 
 export const app = express();
 
@@ -39,6 +40,7 @@ app.use('/api/purchases', purchasesRouter);
 app.use('/api/credits', purchasesRouter);
 app.use('/api/creator', creatorRouter);
 app.use('/api/auth', authRouter);
+app.use('/api/dashboard', dashboardRouter);
 
 // Model Context Protocol (MCP) endpoints
 app.use('/api/mcp', mcpRouter);

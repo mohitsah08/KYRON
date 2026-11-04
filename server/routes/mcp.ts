@@ -535,6 +535,7 @@ export async function processMcpMessage(msg: any, context: McpContext = {}): Pro
         }
 
         case 'execute_skill_workflow': {
+          const execStart = Date.now();
           const { command, skill_slug } = args;
           if (!command || typeof command !== 'string') {
             return {
@@ -672,6 +673,32 @@ export async function processMcpMessage(msg: any, context: McpContext = {}): Pro
                 notice: 'Playbook verified against package schema. Full arbitrary code execution is handled by the client LLM agent runtime.'
               }
             };
+          }
+
+          if (context.user?.id) {
+            const latencyMs = Math.max(1, Date.now() - execStart);
+            const execId = `exec_${crypto.randomUUID()}`;
+            const executedAt = new Date().toISOString();
+            try {
+              await db.run(`
+                INSERT INTO skill_executions (
+                  id, user_id, skill_id, skill_name, command, status, latency_ms, tokens_consumed, payload_json, executed_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              `, [
+                execId,
+                context.user.id,
+                skill?.id || null,
+                skill?.name || 'MCP Playbook',
+                trimmedCommand,
+                executionOutcome.execution_status === 'completed' ? 'completed' : 'failed',
+                latencyMs,
+                Math.max(120, Math.floor(JSON.stringify(executionOutcome).length / 4)),
+                JSON.stringify(executionOutcome),
+                executedAt
+              ]);
+            } catch (logErr: any) {
+              console.warn('MCP execution logging notice:', logErr.message);
+            }
           }
 
           return {

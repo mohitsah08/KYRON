@@ -229,3 +229,31 @@ CREATE TABLE IF NOT EXISTS auth_email_rate_limits (
 CREATE INDEX IF NOT EXISTS idx_rate_limits_email_action ON auth_email_rate_limits(email_hash, action, created_at_ms);
 CREATE INDEX IF NOT EXISTS idx_rate_limits_ip ON auth_email_rate_limits(ip_address, created_at_ms);
 
+CREATE TABLE IF NOT EXISTS skill_executions (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  skill_id TEXT REFERENCES skills(id) ON DELETE SET NULL,
+  skill_name TEXT NOT NULL,
+  command TEXT NOT NULL,
+  status TEXT NOT NULL, -- 'completed' | 'failed' | 'in_progress'
+  latency_ms INTEGER NOT NULL,
+  tokens_consumed INTEGER DEFAULT 0,
+  payload_json TEXT,
+  executed_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_executions_user_time ON skill_executions(user_id, executed_at);
+
+CREATE TABLE IF NOT EXISTS api_keys (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  key_prefix TEXT NOT NULL,
+  key_hash TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  last_used_at TEXT,
+  revoked_at TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_api_keys_user ON api_keys(user_id);
+

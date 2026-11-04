@@ -8,6 +8,7 @@ import { SkillsPage } from './pages/SkillsPage.tsx';
 import { CategoriesPage } from './pages/CategoriesPage.tsx';
 import { SkillDetailPage } from './pages/SkillDetailPage.tsx';
 import { DashboardPage } from './pages/DashboardPage.tsx';
+import { McpHubPage } from './pages/McpHubPage.tsx';
 import { LibraryPage } from './pages/LibraryPage.tsx';
 import { CreatorStudioPage } from './pages/CreatorStudioPage.tsx';
 import { CreatorHubPage } from './pages/CreatorHubPage.tsx';
@@ -52,6 +53,8 @@ export function App() {
     PageComponent = <SkillsPage />;
   } else if (path === '/categories') {
     PageComponent = <CategoriesPage />;
+  } else if (path === '/mcp') {
+    PageComponent = <McpHubPage />;
   } else if (path === '/dashboard' || path === '/workspace') {
     PageComponent = (
       <ProtectedRoute>

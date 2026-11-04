@@ -5,7 +5,6 @@ import { CommandPalette } from './CommandPalette.tsx';
 import { KyronWordmark } from './KyronWordmark.tsx';
 import {
   Search,
-  Bell,
   Plus,
   Menu,
   X,
@@ -142,7 +141,7 @@ export function Navbar() {
             </nav>
           </div>
 
-          {/* Right: Search, notifications, profile */}
+          {/* Right: Search, profile & mobile menu */}
           <div className="flex items-center gap-2 sm:gap-3">
             <button
               onClick={() => setCommandPaletteOpen(true)}
@@ -161,16 +160,6 @@ export function Navbar() {
               aria-label="Search skills"
             >
               <Search className="w-[18px] h-[18px]" />
-            </button>
-
-            <button
-              className="relative p-2 text-[#525252] hover:text-[#171717] hover:bg-[#F5F5F4] rounded-lg transition-colors"
-              title="Notifications"
-              aria-label="Notifications"
-              onClick={() => navigate(session ? '/dashboard' : '/login?next=%2Fdashboard')}
-            >
-              <Bell className="w-[18px] h-[18px]" />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-[#F97316] rounded-full ring-2 ring-white"></span>
             </button>
 
             {authLoading || (session && !user) ? (

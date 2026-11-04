@@ -120,6 +120,17 @@ export function friendlyAuthError(err: unknown, fallback = 'Something went wrong
   if (code === 'session_not_found' || code === 'session_expired' || msg.includes('auth session missing')) {
     return 'Your session has expired. Please sign in again.';
   }
+  if (
+    code === 'provider_disabled' ||
+    code === 'provider_not_configured' ||
+    msg.includes('provider_disabled') ||
+    msg.includes('not configured') ||
+    msg.includes('missing client id') ||
+    msg.includes('google_client_id') ||
+    msg.includes('github_client_id')
+  ) {
+    return 'Social sign-in with this provider is temporarily unavailable. Please sign in with your email and password.';
+  }
   if (code === 'signup_disabled') {
     return 'New sign-ups are currently disabled.';
   }

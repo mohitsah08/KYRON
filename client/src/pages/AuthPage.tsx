@@ -1296,15 +1296,27 @@ function AuthCallback({ next }: { next: string }) {
 
   if (isOAuth) {
     const cancelled = urlError?.code === 'access_denied' || /denied|cancel/i.test(urlError?.description || '');
+    const notConfigured =
+      urlError?.code === 'provider_not_configured' ||
+      urlError?.code === 'provider_disabled' ||
+      /not configured|missing client|temporarily unavailable/i.test(urlError?.description || '');
     return (
       <div className="space-y-5">
         <StatusIcon tone="error" />
         <Heading
-          title={cancelled ? 'Sign-in was cancelled' : 'We couldn’t sign you in'}
+          title={
+            cancelled
+              ? 'Sign-in was cancelled'
+              : notConfigured
+              ? 'Sign-in temporarily unavailable'
+              : 'We couldn’t sign you in'
+          }
           subtitle={
             cancelled
               ? 'No changes were made. You can try again or use your email and password.'
-              : urlError?.description || exchangeError || 'The sign-in attempt failed or expired. Please try again.'
+              : notConfigured
+              ? 'Social sign-in with this provider is temporarily unavailable. Please sign in with your email and password.'
+              : (urlError ? friendlyAuthError(urlError) : exchangeError ? friendlyAuthError(exchangeError) : 'The sign-in attempt failed or expired. Please try again.')
           }
         />
         <PrimaryAction onClick={() => navigate(withNext('/login', next), { replace: true })}>Back to Sign In</PrimaryAction>

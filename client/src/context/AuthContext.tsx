@@ -446,11 +446,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     // 3. If credentials are not yet configured in environment or Supabase:
-    const credKey = provider === 'google'
-      ? 'GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET'
-      : 'GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET';
     throw new AuthActionError(
-      `${PROVIDER_LABELS[provider]} OAuth is fully integrated in code, but requires ${credKey} configured in your environment.`,
+      `${PROVIDER_LABELS[provider]} sign-in is temporarily unavailable. Please sign in with your email and password.`,
       'provider_disabled'
     );
   }, []);

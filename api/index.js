@@ -3553,33 +3553,43 @@ async function fetchOAuthUserProfile(provider, accessToken) {
     if (!res.ok || !data.id) {
       throw new Error(`Failed to retrieve GitHub profile: ${data.message || res.status}`);
     }
-    let email = (data.email || "").trim().toLowerCase();
-    let emailVerified = Boolean(email);
-    if (!email) {
-      try {
-        const emailsUrl = process.env.GITHUB_EMAILS_URL || "https://api.github.com/user/emails";
-        const emailRes = await fetch(emailsUrl, {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            "User-Agent": "KYRON-Agent-Marketplace",
-            Accept: "application/vnd.github+json"
-          }
-        });
-        if (emailRes.ok) {
-          const emails = await emailRes.json();
-          if (Array.isArray(emails) && emails.length > 0) {
-            const primaryVerified = emails.find((e) => e.primary && e.verified);
-            const anyVerified = emails.find((e) => e.verified);
-            const fallback = primaryVerified || anyVerified || emails[0];
-            if (fallback?.email) {
-              email = String(fallback.email).trim().toLowerCase();
-              emailVerified = Boolean(fallback.verified);
+    let email = "";
+    let emailVerified = false;
+    try {
+      const emailsUrl = process.env.GITHUB_EMAILS_URL || "https://api.github.com/user/emails";
+      const emailRes = await fetch(emailsUrl, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "User-Agent": "KYRON-Agent-Marketplace",
+          Accept: "application/vnd.github+json"
+        }
+      });
+      if (emailRes.ok) {
+        const emails = await emailRes.json();
+        if (Array.isArray(emails) && emails.length > 0) {
+          const primaryVerified = emails.find((e) => e.primary && e.verified);
+          const anyVerified = emails.find((e) => e.verified);
+          if (primaryVerified?.email) {
+            email = String(primaryVerified.email).trim().toLowerCase();
+            emailVerified = true;
+          } else if (anyVerified?.email) {
+            email = String(anyVerified.email).trim().toLowerCase();
+            emailVerified = true;
+          } else {
+            const candidate = emails.find((e) => e.primary) || emails[0];
+            if (candidate?.email) {
+              email = String(candidate.email).trim().toLowerCase();
+              emailVerified = Boolean(candidate.verified);
             }
           }
         }
-      } catch (err) {
-        console.warn("Could not fetch secondary GitHub emails:", err.message);
       }
+    } catch (err) {
+      console.warn("Could not fetch GitHub user/emails:", err.message);
+    }
+    if (!email && data.email) {
+      email = String(data.email).trim().toLowerCase();
+      emailVerified = false;
     }
     if (!email) {
       email = `gh_${data.id}@users.noreply.github.com`;
@@ -3627,6 +3637,11 @@ async function syncOAuthAccount(profile) {
       [profile.email]
     );
     if (userByEmail) {
+      if (!profile.emailVerified) {
+        throw new Error(
+          `This email is already registered, but your ${profile.provider === "github" ? "GitHub" : "Google"} email address is not verified. Please verify your email on ${profile.provider === "github" ? "GitHub" : "Google"} or sign in with your email and password.`
+        );
+      }
       const linkId2 = "oacc_" + crypto5.randomUUID();
       try {
         await db.run(

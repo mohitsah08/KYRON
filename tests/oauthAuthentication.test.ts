@@ -58,8 +58,8 @@ describe('KYRON OAuth Authentication (Google & GitHub)', () => {
   before(async () => {
     await initDatabase();
     // Clean any prior run artifacts
-    await db.run(`DELETE FROM oauth_accounts WHERE provider IN ('google', 'github') AND provider_user_id IN ('google_user_99991', 'google_user_existing_888', '777666')`);
-    await db.run(`DELETE FROM profiles WHERE email IN ('google.tester@kyron.dev', 'existing.account@kyron.dev', 'octocat.verified@kyron.dev') OR username IN ('pre_existing_usr')`);
+    await db.run(`DELETE FROM oauth_accounts WHERE provider IN ('google', 'github') AND provider_user_id IN ('google_user_99991', 'google_user_existing_888', '777666', '888777', '999888')`);
+    await db.run(`DELETE FROM profiles WHERE email IN ('google.tester@kyron.dev', 'existing.account@kyron.dev', 'octocat.verified@kyron.dev', 'unverified.target@kyron.dev') OR username IN ('pre_existing_usr', 'octocat_link', 'unverified_hacker')`);
 
     server = app.listen(0);
 
@@ -123,6 +123,46 @@ describe('KYRON OAuth Authentication (Google & GitHub)', () => {
           res.end(JSON.stringify([
             { email: 'octocat.noreply@users.noreply.github.com', primary: false, verified: true },
             { email: 'octocat.verified@kyron.dev', primary: true, verified: true }
+          ]));
+          return;
+        }
+
+        if (req.url === '/mock-github-user-linking') {
+          res.writeHead(200);
+          res.end(JSON.stringify({
+            id: 888777,
+            login: 'octocat_link',
+            name: 'Existing Account Linker',
+            avatar_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+            email: null
+          }));
+          return;
+        }
+
+        if (req.url === '/mock-github-emails-linking') {
+          res.writeHead(200);
+          res.end(JSON.stringify([
+            { email: 'existing.account@kyron.dev', primary: true, verified: true }
+          ]));
+          return;
+        }
+
+        if (req.url === '/mock-github-user-unverified') {
+          res.writeHead(200);
+          res.end(JSON.stringify({
+            id: 999888,
+            login: 'unverified_hacker',
+            name: 'Unverified Hacker',
+            avatar_url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
+            email: 'unverified.target@kyron.dev'
+          }));
+          return;
+        }
+
+        if (req.url === '/mock-github-emails-unverified') {
+          res.writeHead(200);
+          res.end(JSON.stringify([
+            { email: 'unverified.target@kyron.dev', primary: true, verified: false }
           ]));
           return;
         }
@@ -383,5 +423,62 @@ describe('KYRON OAuth Authentication (Google & GitHub)', () => {
     assert.strictEqual(meRes.body.user.id, user.id);
     assert.strictEqual(meRes.body.user.email, user.email);
     assert.strictEqual(meRes.body.user.username, user.username);
+  });
+
+  it('12. GitHub OAuth account linking: Safely links to pre-existing account with matching verified email without duplication', async () => {
+    // Switch to linking mock endpoints
+    process.env.GITHUB_USER_URL = `http://localhost:${mockPort}/mock-github-user-linking`;
+    process.env.GITHUB_EMAILS_URL = `http://localhost:${mockPort}/mock-github-emails-linking`;
+
+    const existingUser = await db.get(`SELECT * FROM profiles WHERE email = 'existing.account@kyron.dev'`) as any;
+    assert.ok(existingUser, 'Existing user must exist from prior test');
+
+    const state = createOAuthState('github', '/dashboard');
+    const res = await requestRaw(server, `/api/auth/oauth/github/callback?code=mock_github_link_code&state=${state}`);
+    assert.strictEqual(res.status, 302);
+
+    // Verify only ONE account exists for that email
+    const totalWithEmail = (await db.get(`SELECT COUNT(*) as cnt FROM profiles WHERE email = 'existing.account@kyron.dev'`) as any).cnt;
+    assert.strictEqual(totalWithEmail, 1, 'Only one profile must exist for this email');
+
+    // Verify oauth_accounts has a GitHub entry linked to existing user ID
+    const link = await db.get(`SELECT * FROM oauth_accounts WHERE provider = 'github' AND provider_user_id = '888777'`) as any;
+    assert.ok(link, 'GitHub link should have been created');
+    assert.strictEqual(link.user_id, existingUser.id, 'Must link to pre-existing user ID');
+
+    // Restore standard mock endpoints
+    process.env.GITHUB_USER_URL = `http://localhost:${mockPort}/mock-github-user`;
+    process.env.GITHUB_EMAILS_URL = `http://localhost:${mockPort}/mock-github-emails`;
+  });
+
+  it('13. GitHub OAuth security: Unverified email from provider does NOT link to existing account', async () => {
+    // Seed target account that an attacker tries to link to
+    const targetId = 'usr_target_' + Math.random().toString(36).substring(7);
+    await db.run(
+      `INSERT INTO profiles (id, email, display_name, full_name, username, credit_balance, created_at, updated_at)
+       VALUES (?, 'unverified.target@kyron.dev', 'Legitimate Target', 'Legitimate Target', 'legit_target', 50.00, datetime('now'), datetime('now'))`,
+      [targetId]
+    );
+
+    // Switch to unverified mock endpoints
+    process.env.GITHUB_USER_URL = `http://localhost:${mockPort}/mock-github-user-unverified`;
+    process.env.GITHUB_EMAILS_URL = `http://localhost:${mockPort}/mock-github-emails-unverified`;
+
+    const state = createOAuthState('github', '/dashboard');
+    const res = await requestRaw(server, `/api/auth/oauth/github/callback?code=mock_unverified_code&state=${state}`);
+    assert.strictEqual(res.status, 302);
+    const location = String(res.headers.location);
+
+    // Verify rejection: redirect contains auth_failed error and mentions not verified
+    assert.ok(location.includes('error=auth_failed'), 'Must reject unverified email linking with auth_failed');
+    assert.ok(location.includes('not%20verified') || location.includes('not+verified'), 'Error description must mention email is not verified');
+
+    // Verify oauth_accounts was NOT linked to targetId
+    const link = await db.get(`SELECT * FROM oauth_accounts WHERE provider = 'github' AND provider_user_id = '999888'`) as any;
+    assert.ok(!link, 'Must NOT create link for unverified email attempt');
+
+    // Restore standard mock endpoints
+    process.env.GITHUB_USER_URL = `http://localhost:${mockPort}/mock-github-user`;
+    process.env.GITHUB_EMAILS_URL = `http://localhost:${mockPort}/mock-github-emails`;
   });
 });

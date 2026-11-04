@@ -285,35 +285,47 @@ export async function fetchOAuthUserProfile(
       throw new Error(`Failed to retrieve GitHub profile: ${data.message || res.status}`);
     }
 
-    let email = (data.email || '').trim().toLowerCase();
-    let emailVerified = Boolean(email);
+    let email = '';
+    let emailVerified = false;
 
-    // If primary email is private or not returned, fetch user/emails
-    if (!email) {
-      try {
-        const emailsUrl = process.env.GITHUB_EMAILS_URL || 'https://api.github.com/user/emails';
-        const emailRes = await fetch(emailsUrl, {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            'User-Agent': 'KYRON-Agent-Marketplace',
-            Accept: 'application/vnd.github+json'
-          }
-        });
-        if (emailRes.ok) {
-          const emails = await emailRes.json();
-          if (Array.isArray(emails) && emails.length > 0) {
-            const primaryVerified = emails.find((e: any) => e.primary && e.verified);
-            const anyVerified = emails.find((e: any) => e.verified);
-            const fallback = primaryVerified || anyVerified || emails[0];
-            if (fallback?.email) {
-              email = String(fallback.email).trim().toLowerCase();
-              emailVerified = Boolean(fallback.verified);
+    // Fetch verified emails from GitHub /user/emails
+    try {
+      const emailsUrl = process.env.GITHUB_EMAILS_URL || 'https://api.github.com/user/emails';
+      const emailRes = await fetch(emailsUrl, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'User-Agent': 'KYRON-Agent-Marketplace',
+          Accept: 'application/vnd.github+json'
+        }
+      });
+      if (emailRes.ok) {
+        const emails = await emailRes.json();
+        if (Array.isArray(emails) && emails.length > 0) {
+          const primaryVerified = emails.find((e: any) => e.primary && e.verified);
+          const anyVerified = emails.find((e: any) => e.verified);
+          if (primaryVerified?.email) {
+            email = String(primaryVerified.email).trim().toLowerCase();
+            emailVerified = true;
+          } else if (anyVerified?.email) {
+            email = String(anyVerified.email).trim().toLowerCase();
+            emailVerified = true;
+          } else {
+            const candidate = emails.find((e: any) => e.primary) || emails[0];
+            if (candidate?.email) {
+              email = String(candidate.email).trim().toLowerCase();
+              emailVerified = Boolean(candidate.verified);
             }
           }
         }
-      } catch (err: any) {
-        console.warn('Could not fetch secondary GitHub emails:', err.message);
       }
+    } catch (err: any) {
+      console.warn('Could not fetch GitHub user/emails:', err.message);
+    }
+
+    // Fallback to public profile email if /user/emails was unavailable
+    if (!email && data.email) {
+      email = String(data.email).trim().toLowerCase();
+      emailVerified = false;
     }
 
     // Safe fallback if GitHub user has completely hidden emails
@@ -375,7 +387,7 @@ export async function syncOAuthAccount(profile: OAuthUserProfile): Promise<{
   }
 
   // 2. Check if a user with this email already exists in profiles
-  // (Safe account linking: only if provider verified the email or account exists)
+  // (Safe account linking: ONLY if provider verified the email ownership)
   if (profile.email && !profile.email.includes('users.noreply.github.com')) {
     const userByEmail = await db.get(
       `SELECT id, email, display_name, username, avatar_url, credit_balance, is_unlimited_credit_user, role FROM profiles WHERE email = ?`,
@@ -383,6 +395,12 @@ export async function syncOAuthAccount(profile: OAuthUserProfile): Promise<{
     ) as any;
 
     if (userByEmail) {
+      if (!profile.emailVerified) {
+        throw new Error(
+          `This email is already registered, but your ${profile.provider === 'github' ? 'GitHub' : 'Google'} email address is not verified. Please verify your email on ${profile.provider === 'github' ? 'GitHub' : 'Google'} or sign in with your email and password.`
+        );
+      }
+
       // Link this provider account to the existing profile
       const linkId = 'oacc_' + crypto.randomUUID();
       try {

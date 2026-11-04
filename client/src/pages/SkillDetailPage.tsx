@@ -135,7 +135,8 @@ export function SkillDetailPage({ slug }: { slug: string }) {
   }
 
   const { skill, creator, deal, security_audit, reviews, user_vote, is_saved, is_purchased } = data;
-  const isFree = skill.pricing_type === 'free' || skill.price === 0;
+  const isPaid = skill.pricing_type === 'paid' && Number(skill.price) > 0;
+  const isFree = !isPaid;
   const isCreator = user ? user.id === skill.creator_id : false;
   const isUnlocked = isFree || is_purchased || isCreator;
   const effectivePrice = deal ? skill.price * (1 - deal.discount_percent / 100) : skill.price;

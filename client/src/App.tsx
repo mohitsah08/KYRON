@@ -13,6 +13,8 @@ import { CreatorStudioPage } from './pages/CreatorStudioPage.tsx';
 import { CreatorHubPage } from './pages/CreatorHubPage.tsx';
 import { SubmitSkillPage } from './pages/SubmitSkillPage.tsx';
 import { CreatorProfilePage } from './pages/CreatorProfilePage.tsx';
+import { MyProfilePage } from './pages/MyProfilePage.tsx';
+import { AccountSettingsPage } from './pages/AccountSettingsPage.tsx';
 import { ChatPage } from './pages/ChatPage.tsx';
 import { ProjectsPage } from './pages/ProjectsPage.tsx';
 import { ProjectDetailPage } from './pages/ProjectDetailPage.tsx';
@@ -25,23 +27,13 @@ import { useAuth } from './context/AuthContext.tsx';
 
 const AUTH_ROUTES = ['/auth', '/login', '/signup', '/forgot-password', '/reset-password', '/auth/callback'];
 
-// "My Profile" resolves to the signed-in user's public creator page.
-function MyProfileRedirect() {
-  const { user } = useAuth();
-  const { navigate } = useRouter();
-  React.useEffect(() => {
-    if (user?.username) navigate(`/creators/${user.username}`, { replace: true });
-  }, [user?.username]); // eslint-disable-line react-hooks/exhaustive-deps
-  return <AuthLoadingScreen label="Opening your profile…" />;
-}
-
 export function App() {
   const { path } = useRouter();
 
   // Route matchers
   const skillDetailMatch = path.match(/^\/skills\/([a-zA-Z0-9_-]+)$/);
   const projectDetailMatch = path.match(/^\/projects\/([a-zA-Z0-9_-]+)$/);
-  const creatorProfileMatch = path.match(/^\/creators\/([a-zA-Z0-9_-]+)$/);
+  const creatorProfileMatch = path.match(/^\/creators\/([a-zA-Z0-9_-]+)$/) || path.match(/^\/u\/([a-zA-Z0-9_-]+)$/);
 
   let PageComponent = <HomePage />;
   const isChatPage = path === '/chat';
@@ -82,10 +74,10 @@ export function App() {
     PageComponent = <ChatPage />;
   } else if (path === '/projects') {
     PageComponent = <ProjectsPage />;
-  } else if (path === '/settings' || path === '/team') {
+  } else if (path === '/settings' || path === '/account' || path === '/team' || path === '/billing' || path === '/preferences') {
     PageComponent = (
       <ProtectedRoute>
-        <TeamSettingsPage />
+        <AccountSettingsPage />
       </ProtectedRoute>
     );
   } else if (path === '/admin' || path === '/security') {
@@ -95,7 +87,7 @@ export function App() {
   } else if (path === '/profile') {
     PageComponent = (
       <ProtectedRoute>
-        <MyProfileRedirect />
+        <MyProfilePage />
       </ProtectedRoute>
     );
   }

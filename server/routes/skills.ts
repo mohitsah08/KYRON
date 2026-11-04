@@ -128,7 +128,49 @@ router.get('/deals', async (_req, res: Response) => {
 // 3. Search and browse skills
 router.get('/', optionalAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const { category, pricing_type, creator, q, sort = 'trending', limit = 50, offset = 0 } = req.query;
+    const { category, creator, q, sort = 'trending', limit = 50, offset = 0 } = req.query;
+    const filterParam = typeof req.query.pricing_type === 'string' && req.query.pricing_type.trim()
+      ? req.query.pricing_type.trim().toLowerCase()
+      : (typeof req.query.filter === 'string' && req.query.filter.trim()
+        ? req.query.filter.trim().toLowerCase()
+        : undefined);
+
+    let whereSql = ` WHERE s.status IN ('live', 'published')`;
+    const params: any[] = [];
+
+    if (creator && typeof creator === 'string' && creator.trim()) {
+      whereSql += ` AND (p.username = ? OR p.id = ?)`;
+      params.push(creator.trim(), creator.trim());
+    }
+
+    if (category && typeof category === 'string' && category !== 'all') {
+      whereSql += ` AND s.category = ?`;
+      params.push(category);
+    }
+
+    if (filterParam === 'free') {
+      whereSql += ` AND s.pricing_type = 'free' AND (s.price IS NULL OR s.price = 0)`;
+    } else if (filterParam === 'paid') {
+      whereSql += ` AND s.pricing_type = 'paid' AND s.price > 0`;
+    } else if (filterParam && filterParam !== 'all') {
+      // Any unsupported pricing filter (such as 'subscription') returns no results
+      whereSql += ` AND 1 = 0`;
+    }
+
+    if (q && typeof q === 'string' && q.trim()) {
+      const searchTerm = `%${q.trim()}%`;
+      whereSql += ` AND (s.name LIKE ? OR s.summary LIKE ? OR s.tags LIKE ? OR p.display_name LIKE ?)`;
+      params.push(searchTerm, searchTerm, searchTerm, searchTerm);
+    }
+
+    const countSql = `
+      SELECT COUNT(*) as total
+      FROM skills s
+      JOIN profiles p ON s.creator_id = p.id
+      ${whereSql}
+    `;
+    const countRow = await db.get(countSql, params) as any;
+    const total = countRow ? Number(countRow.total || 0) : 0;
 
     let querySql = `
       SELECT s.id, s.name, s.slug, s.summary, s.category, s.tags, s.logo_url,
@@ -140,32 +182,8 @@ router.get('/', optionalAuth, async (req: AuthRequest, res: Response) => {
       FROM skills s
       JOIN profiles p ON s.creator_id = p.id
       LEFT JOIN skill_deals d ON d.skill_id = s.id AND d.is_active = 1 AND datetime(d.expires_at) > datetime('now')
-      WHERE s.status IN ('live', 'published')
+      ${whereSql}
     `;
-
-    const params: any[] = [];
-
-    if (creator && typeof creator === 'string' && creator.trim()) {
-      querySql += ` AND (p.username = ? OR p.id = ?)`;
-      params.push(creator.trim(), creator.trim());
-    }
-
-    if (category && typeof category === 'string' && category !== 'all') {
-      querySql += ` AND s.category = ?`;
-      params.push(category);
-    }
-
-    if (pricing_type === 'free') {
-      querySql += ` AND (s.pricing_type = 'free' OR s.price = 0)`;
-    } else if (pricing_type === 'paid') {
-      querySql += ` AND (s.pricing_type = 'paid' OR s.pricing_type = 'subscription' OR s.price > 0)`;
-    }
-
-    if (q && typeof q === 'string' && q.trim()) {
-      const searchTerm = `%${q.trim()}%`;
-      querySql += ` AND (s.name LIKE ? OR s.summary LIKE ? OR s.tags LIKE ? OR p.display_name LIKE ?)`;
-      params.push(searchTerm, searchTerm, searchTerm, searchTerm);
-    }
 
     // Sort logic
     switch (sort) {
@@ -178,6 +196,7 @@ router.get('/', optionalAuth, async (req: AuthRequest, res: Response) => {
       case 'rating':
         querySql += ` ORDER BY s.average_rating DESC, s.review_count DESC`;
         break;
+      case 'popular':
       case 'installs':
         querySql += ` ORDER BY s.install_count DESC`;
         break;
@@ -194,9 +213,7 @@ router.get('/', optionalAuth, async (req: AuthRequest, res: Response) => {
     }
 
     querySql += ` LIMIT ? OFFSET ?`;
-    params.push(Number(limit), Number(offset));
-
-    const rows = await db.all(querySql, params) as any[];
+    const rows = await db.all(querySql, [...params, Number(limit), Number(offset)]) as any[];
 
     // Format tags and deals
     const formatted = rows.map(r => {
@@ -211,9 +228,12 @@ router.get('/', optionalAuth, async (req: AuthRequest, res: Response) => {
         discounted_price: Number((Number(r.price) * (1 - Number(r.discount_percent) / 100)).toFixed(2))
       } : null;
 
+      const safePricingType = r.pricing_type === 'free' ? 'free' : 'paid';
+
       return {
         ...r,
-        price: Number(r.price),
+        pricing_type: safePricingType,
+        price: safePricingType === 'free' ? 0 : Number(r.price),
         net_votes: Number(r.net_votes),
         average_rating: Number(r.average_rating),
         review_count: Number(r.review_count),
@@ -224,7 +244,7 @@ router.get('/', optionalAuth, async (req: AuthRequest, res: Response) => {
       };
     });
 
-    res.json({ skills: formatted, count: formatted.length });
+    res.json({ skills: formatted, count: formatted.length, total });
   } catch (err: any) {
     console.error('Skills browse error:', err.message);
     res.status(500).json({ error: 'Failed to retrieve skills catalog.' });

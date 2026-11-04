@@ -108,8 +108,11 @@ export function friendlyAuthError(err: unknown, fallback = 'Something went wrong
   if (code === 'same_password' || msg.includes('should be different')) {
     return 'Your new password must be different from your current one.';
   }
+  if (code === 'email_rate_limit_exceeded' || msg.includes('maximum of 3 email requests')) {
+    return e.message || "You've reached the maximum of 3 email requests within 24 hours. Please try again later.";
+  }
   if (code === 'over_email_send_rate_limit' || code === 'over_request_rate_limit' || e.status === 429 || msg.includes('rate limit')) {
-    return 'Too many attempts. Please wait a minute and try again.';
+    return e.message || 'Too many attempts. Please wait a minute and try again.';
   }
   if (code === 'otp_expired' || msg.includes('expired')) {
     return 'This link has expired. Request a new one to continue.';

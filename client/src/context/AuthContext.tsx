@@ -1,9 +1,9 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, ReactNode } from 'react';
 import type { Session, User as SupabaseUser } from '@supabase/supabase-js';
 import { Profile } from '../types.ts';
-import { api, setAuthToken } from '../utils/api.ts';
+import { api, setAuthToken, getAuthToken } from '../utils/api.ts';
 import { supabase, supabaseUrl, supabaseAnonKey } from '../utils/supabase.ts';
-import { friendlyAuthError, validateAvatarFile } from '../utils/authHelpers.ts';
+import { friendlyAuthError, validateAvatarFile, sanitizeRedirect } from '../utils/authHelpers.ts';
 
 export interface RegisterResult {
   needsEmailVerification: boolean;
@@ -13,10 +13,14 @@ export interface RegisterResult {
 // Error thrown by auth actions: `message` is safe to show, `code` lets screens branch (e.g. resend verification).
 export class AuthActionError extends Error {
   code?: string;
-  constructor(message: string, code?: string) {
+  nextEligibleAt?: string;
+  retryAfterSeconds?: number;
+  constructor(message: string, code?: string, nextEligibleAt?: string, retryAfterSeconds?: number) {
     super(message);
     this.name = 'AuthActionError';
     this.code = code;
+    this.nextEligibleAt = nextEligibleAt;
+    this.retryAfterSeconds = retryAfterSeconds;
   }
 }
 
@@ -28,12 +32,16 @@ interface AuthContextType {
   loading: boolean;
   isPasswordRecovery: boolean;
   login: (email: string, pass: string) => Promise<void>;
+  loginWithToken: (token: string) => Promise<void>;
   register: (payload: { email: string; password: string; display_name: string; username: string }) => Promise<RegisterResult>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
   updateProfile: (updates: Partial<Profile>) => Promise<void>;
   uploadAvatar: (file: File) => Promise<string>;
+  uploadCoverImage: (file: File) => Promise<string>;
   resetPassword: (email: string) => Promise<void>;
+  sendPasswordResetOtp: (email: string) => Promise<void>;
+  verifyPasswordResetOtp: (email: string, otp: string, newPassword: string) => Promise<void>;
   updatePassword: (newPassword: string) => Promise<void>;
   resendVerification: (email: string) => Promise<void>;
   signInWithProvider: (provider: OAuthProvider, next?: string) => Promise<void>;
@@ -65,8 +73,12 @@ function loadProviderSettings(): Promise<Record<string, boolean> | null> {
 }
 
 function toActionError(err: unknown, fallback?: string): AuthActionError {
-  const code = (err as { code?: string })?.code;
-  return new AuthActionError(friendlyAuthError(err, fallback), code);
+  const e = (err || {}) as { message?: string; code?: string; next_eligible_at?: string; retry_after_seconds?: number };
+  const code = e.code;
+  const message = (code === 'email_rate_limit_exceeded' || e.message?.includes('maximum of 3 email requests'))
+    ? (e.message || "You've reached the maximum of 3 email requests within 24 hours. Please try again later.")
+    : friendlyAuthError(err, fallback);
+  return new AuthActionError(message, code, e.next_eligible_at, e.retry_after_seconds);
 }
 
 export function authRedirectUrl(path: string): string {
@@ -146,11 +158,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!active) return;
 
       setSession(nextSession);
-      setAuthToken(nextSession?.access_token ?? null);
+      if (nextSession?.access_token) {
+        setAuthToken(nextSession.access_token);
+      }
 
       if (event === 'PASSWORD_RECOVERY') setIsPasswordRecovery(true);
 
       if (!nextSession?.user) {
+        const storedToken = getAuthToken();
+        if (storedToken) {
+          api.getMe()
+            .then(res => {
+              if (active && res.user) {
+                currentUserId.current = res.user.id;
+                setUser(res.user);
+              }
+            })
+            .catch(() => {
+              setAuthToken(null);
+              if (active) setUser(null);
+            })
+            .finally(() => {
+              if (active) setLoading(false);
+            });
+          return;
+        }
+
         currentUserId.current = null;
         profileRequest.current = null;
         setUser(null);
@@ -183,8 +216,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refreshUser = useCallback(async () => {
     const authUser = session?.user;
-    if (!authUser) return;
-    await loadProfile(authUser, true);
+    if (authUser) {
+      await loadProfile(authUser, true);
+    } else if (getAuthToken()) {
+      try {
+        const res = await api.getMe();
+        if (res.user) setUser(res.user);
+      } catch (err) {
+        console.warn('refreshUser error:', err);
+      }
+    }
   }, [session, loadProfile]);
 
   const login = useCallback(async (email: string, pass: string) => {
@@ -203,9 +244,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [loadProfile]);
 
   const register = useCallback(async (payload: { email: string; password: string; display_name: string; username: string }): Promise<RegisterResult> => {
+    const cleanEmail = payload.email.trim().toLowerCase();
+
+    // Check rate limit quota before initiating signup verification dispatch
+    try {
+      await api.preSignupRateLimitCheck(cleanEmail);
+    } catch (err: any) {
+      throw toActionError(err, 'Failed to verify signup eligibility.');
+    }
+
     const fullName = payload.display_name.trim();
     const { data, error } = await supabase.auth.signUp({
-      email: payload.email.trim().toLowerCase(),
+      email: cleanEmail,
       password: payload.password,
       options: {
         emailRedirectTo: authRedirectUrl('/auth/callback'),
@@ -257,7 +307,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const uploadAvatar = useCallback(async (file: File): Promise<string> => {
-    const userId = session?.user?.id;
+    const userId = session?.user?.id || user?.id;
     if (!userId) throw new AuthActionError('Please sign in again to upload an avatar.');
 
     const invalid = validateAvatarFile(file);
@@ -280,12 +330,66 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return data.publicUrl;
   }, [session, updateProfile]);
 
-  const resetPassword = useCallback(async (email: string) => {
-    const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
-      redirectTo: authRedirectUrl('/reset-password')
+  const uploadCoverImage = useCallback(async (file: File): Promise<string> => {
+    const userId = session?.user?.id || user?.id;
+    if (!userId) throw new AuthActionError('Please sign in again to upload a cover image.');
+
+    const invalid = validateAvatarFile(file);
+    if (invalid) throw new AuthActionError(invalid);
+
+    const ext = (file.type.split('/')[1] || 'png').replace('jpeg', 'jpg');
+    const filePath = `${userId}/cover-${Date.now()}.${ext}`;
+
+    try {
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(filePath, file, { upsert: false, contentType: file.type, cacheControl: '3600' });
+      if (!uploadError) {
+        const { data } = supabase.storage.from('avatars').getPublicUrl(filePath);
+        await updateProfile({ cover_image_url: data.publicUrl });
+        return data.publicUrl;
+      }
+    } catch {}
+
+    // Fallback: load as local Data URL
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const dataUrl = reader.result as string;
+        await updateProfile({ cover_image_url: dataUrl });
+        resolve(dataUrl);
+      };
+      reader.onerror = () => reject(new AuthActionError('Failed to read cover image file.'));
+      reader.readAsDataURL(file);
     });
-    // Unknown addresses succeed silently on Supabase's side, so this never reveals account existence.
-    if (error) throw toActionError(error, 'We couldn’t send the reset email. Please try again.');
+  }, [session, user, updateProfile]);
+
+  const resetPassword = useCallback(async (email: string) => {
+    try {
+      await api.sendPasswordResetLink(email.trim().toLowerCase());
+    } catch (err: any) {
+      throw toActionError(err, 'We couldn’t send the reset email. Please try again.');
+    }
+  }, []);
+
+  const sendPasswordResetOtp = useCallback(async (email: string) => {
+    try {
+      await api.sendPasswordResetOtp(email.trim().toLowerCase());
+    } catch (err: any) {
+      throw toActionError(err, 'We couldn’t send the recovery code. Please try again.');
+    }
+  }, []);
+
+  const verifyPasswordResetOtp = useCallback(async (email: string, otp: string, newPassword: string) => {
+    try {
+      await api.verifyPasswordResetOtp({
+        email: email.trim().toLowerCase(),
+        otp,
+        new_password: newPassword
+      });
+    } catch (err: any) {
+      throw toActionError(err, 'Failed to verify recovery code.');
+    }
   }, []);
 
   const updatePassword = useCallback(async (newPassword: string) => {
@@ -295,26 +399,60 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const resendVerification = useCallback(async (email: string) => {
-    const { error } = await supabase.auth.resend({
-      type: 'signup',
-      email: email.trim().toLowerCase(),
-      options: { emailRedirectTo: authRedirectUrl('/auth/callback') }
-    });
-    if (error) throw toActionError(error, 'We couldn’t resend the verification email. Please try again.');
+    try {
+      await api.sendVerificationEmail(email.trim().toLowerCase());
+    } catch (err: any) {
+      throw toActionError(err, 'We couldn’t resend the verification email. Please try again.');
+    }
+  }, []);
+
+  const loginWithToken = useCallback(async (token: string) => {
+    setAuthToken(token);
+    try {
+      const res = await api.getMe();
+      if (res.user) {
+        currentUserId.current = res.user.id;
+        setUser(res.user);
+      }
+    } catch (err: any) {
+      setAuthToken(null);
+      throw toActionError(err, 'Could not authenticate with session token.');
+    }
   }, []);
 
   const signInWithProvider = useCallback(async (provider: OAuthProvider, next?: string) => {
+    const safeNext = sanitizeRedirect(next, '/dashboard');
+
+    // 1. Check if KYRON backend OAuth is configured for this provider
+    try {
+      const backendProviders = await api.getOAuthProviders().catch(() => null);
+      if (backendProviders && backendProviders[provider]) {
+        const dest = safeNext ? `?next=${encodeURIComponent(safeNext)}` : '';
+        window.location.href = `/api/auth/oauth/${provider}${dest}`;
+        return;
+      }
+    } catch {}
+
+    // 2. Check if Supabase has this provider enabled
     const enabled = await loadProviderSettings();
-    if (enabled && !enabled[provider]) {
-      throw new AuthActionError(`${PROVIDER_LABELS[provider]} sign-in isn’t enabled for KYRON yet. Use email and password for now.`, 'provider_disabled');
+    if (enabled && enabled[provider]) {
+      const callback = safeNext ? `/auth/callback?flow=oauth&next=${encodeURIComponent(safeNext)}` : '/auth/callback?flow=oauth';
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: { redirectTo: authRedirectUrl(callback) }
+      });
+      if (error) throw toActionError(error, `We couldn’t start ${PROVIDER_LABELS[provider]} sign-in. Please try again.`);
+      return;
     }
-    const callback = next ? `/auth/callback?flow=oauth&next=${encodeURIComponent(next)}` : '/auth/callback?flow=oauth';
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider,
-      options: { redirectTo: authRedirectUrl(callback) }
-    });
-    if (error) throw toActionError(error, `We couldn’t start ${PROVIDER_LABELS[provider]} sign-in. Please try again.`);
-    // On success the browser is already navigating to the provider.
+
+    // 3. If credentials are not yet configured in environment or Supabase:
+    const credKey = provider === 'google'
+      ? 'GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET'
+      : 'GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET';
+    throw new AuthActionError(
+      `${PROVIDER_LABELS[provider]} OAuth is fully integrated in code, but requires ${credKey} configured in your environment.`,
+      'provider_disabled'
+    );
   }, []);
 
   const value = useMemo<AuthContextType>(() => ({
@@ -325,18 +463,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     loading,
     isPasswordRecovery,
     login,
+    loginWithToken,
     register,
     logout,
     refreshUser,
     updateProfile,
     uploadAvatar,
+    uploadCoverImage,
     resetPassword,
+    sendPasswordResetOtp,
+    verifyPasswordResetOtp,
     updatePassword,
     resendVerification,
     signInWithProvider,
     isCreditModalOpen,
     setIsCreditModalOpen
-  }), [signInWithProvider, user, session, loading, isPasswordRecovery, login, register, logout, refreshUser, updateProfile, uploadAvatar, resetPassword, updatePassword, resendVerification, isCreditModalOpen]);
+  }), [loginWithToken, signInWithProvider, user, session, loading, isPasswordRecovery, login, register, logout, refreshUser, updateProfile, uploadAvatar, uploadCoverImage, resetPassword, sendPasswordResetOtp, verifyPasswordResetOtp, updatePassword, resendVerification, isCreditModalOpen]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

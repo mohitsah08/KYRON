@@ -15,7 +15,51 @@ CREATE TABLE IF NOT EXISTS profiles (
   role TEXT DEFAULT 'user',
   website_url TEXT,
   onboarding_completed INTEGER DEFAULT 0,
-  updated_at TEXT
+  updated_at TEXT,
+  first_name TEXT,
+  last_name TEXT,
+  cover_image_url TEXT,
+  location TEXT,
+  phone TEXT,
+  social_links TEXT,
+  creator_mode_enabled INTEGER DEFAULT 0,
+  creator_display_name TEXT,
+  creator_avatar_url TEXT,
+  creator_cover_image_url TEXT,
+  creator_headline TEXT,
+  creator_bio TEXT,
+  creator_skills TEXT,
+  creator_categories TEXT,
+  creator_portfolio TEXT,
+  creator_links TEXT,
+  creator_verified INTEGER DEFAULT 0,
+  creator_storefront_slug TEXT,
+  role_type TEXT DEFAULT 'individual',
+  professional_title TEXT,
+  skills_expertise TEXT,
+  years_experience INTEGER DEFAULT 0,
+  portfolio_items TEXT,
+  services_offered TEXT,
+  agency_name TEXT,
+  agency_logo_url TEXT,
+  agency_description TEXT,
+  agency_website TEXT,
+  agency_team_size TEXT,
+  agency_designation TEXT,
+  agency_permissions TEXT,
+  company_name TEXT,
+  company_industry TEXT,
+  company_size TEXT,
+  hiring_preferences TEXT,
+  theme_preference TEXT DEFAULT 'system',
+  language TEXT DEFAULT 'en',
+  timezone TEXT DEFAULT 'UTC',
+  notification_preferences TEXT,
+  profile_visibility TEXT DEFAULT 'public',
+  discoverability INTEGER DEFAULT 1,
+  messaging_preference TEXT DEFAULT 'anyone',
+  is_deactivated INTEGER DEFAULT 0,
+  deactivated_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS skills (
@@ -27,7 +71,7 @@ CREATE TABLE IF NOT EXISTS skills (
   category TEXT NOT NULL,
   tags TEXT NOT NULL, -- JSON array string
   logo_url TEXT,
-  pricing_type TEXT CHECK (pricing_type IN ('free', 'paid', 'subscription')) NOT NULL,
+  pricing_type TEXT CHECK (pricing_type IN ('free', 'paid')) NOT NULL,
   price REAL DEFAULT 0.00,
   subscription_price_monthly REAL,
   compatibility_type TEXT DEFAULT 'universal',
@@ -141,3 +185,47 @@ CREATE TABLE IF NOT EXISTS skill_versions (
   created_at TEXT NOT NULL,
   UNIQUE (skill_id, version_number)
 );
+
+CREATE TABLE IF NOT EXISTS oauth_accounts (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  provider TEXT NOT NULL,
+  provider_user_id TEXT NOT NULL,
+  email TEXT,
+  created_at TEXT NOT NULL,
+  UNIQUE(provider, provider_user_id)
+);
+
+CREATE TABLE IF NOT EXISTS login_activity (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  ip_address TEXT,
+  user_agent TEXT,
+  device_type TEXT,
+  location TEXT,
+  logged_in_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS active_sessions (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  token_hash TEXT,
+  device_name TEXT,
+  ip_address TEXT,
+  last_active TEXT NOT NULL,
+  is_current INTEGER DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS auth_email_rate_limits (
+  id TEXT PRIMARY KEY,
+  email_hash TEXT NOT NULL,
+  action TEXT NOT NULL,
+  ip_address TEXT,
+  outcome TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  created_at_ms INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_rate_limits_email_action ON auth_email_rate_limits(email_hash, action, created_at_ms);
+CREATE INDEX IF NOT EXISTS idx_rate_limits_ip ON auth_email_rate_limits(ip_address, created_at_ms);
+

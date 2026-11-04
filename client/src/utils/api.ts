@@ -33,7 +33,13 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const data = await res.json().catch(() => ({}));
 
   if (!res.ok) {
-    throw new Error(data.error || `Request failed with status ${res.status}`);
+    const error: any = new Error(data.error || `Request failed with status ${res.status}`);
+    error.status = res.status;
+    error.code = data.code;
+    error.action = data.action;
+    error.next_eligible_at = data.next_eligible_at;
+    error.retry_after_seconds = data.retry_after_seconds;
+    throw error;
   }
 
   return data as T;
@@ -45,6 +51,7 @@ export const api = {
     category?: string;
     sort?: string;
     filter?: string;
+    pricing_type?: string;
     q?: string;
     limit?: number;
     offset?: number;
@@ -53,12 +60,20 @@ export const api = {
     const searchParams = new URLSearchParams();
     if (params.category) searchParams.set('category', params.category);
     if (params.sort) searchParams.set('sort', params.sort);
-    if (params.filter) searchParams.set('filter', params.filter);
+    const filterVal = params.pricing_type || params.filter;
+    if (filterVal && filterVal !== 'all') {
+      searchParams.set('pricing_type', filterVal);
+      searchParams.set('filter', filterVal);
+    }
     if (params.q) searchParams.set('q', params.q);
     if (params.creator) searchParams.set('creator', params.creator);
     if (params.limit) searchParams.set('limit', String(params.limit));
     if (params.offset) searchParams.set('offset', String(params.offset));
-    return request(`/api/skills?${searchParams.toString()}`);
+    const data = await request<{ skills: Skill[]; total?: number; count?: number }>(`/api/skills?${searchParams.toString()}`);
+    return {
+      skills: data.skills || [],
+      total: typeof data.total === 'number' ? data.total : (typeof data.count === 'number' ? data.count : (data.skills ? data.skills.length : 0))
+    };
   },
 
   async getCategories(): Promise<{ categories: CategoryCount[]; total_skills: number }> {
@@ -381,10 +396,147 @@ export const api = {
     return request('/api/auth/me');
   },
 
+  async getOAuthProviders(): Promise<{ google: boolean; github: boolean }> {
+    return request('/api/auth/oauth/providers');
+  },
+
   async updateProfile(updates: Partial<Profile>): Promise<{ user: Profile }> {
     return request('/api/auth/me', {
       method: 'PUT',
       body: JSON.stringify(updates)
+    });
+  },
+
+  async checkUsername(username: string, currentUserId?: string): Promise<{ available: boolean; reason?: string }> {
+    const params = new URLSearchParams({ username });
+    if (currentUserId) params.set('current_user_id', currentUserId);
+    return request(`/api/auth/check-username?${params.toString()}`);
+  },
+
+  async updateCreatorProfileFull(payload: any): Promise<{ success: boolean; user: Profile }> {
+    return request('/api/auth/creator-profile', {
+      method: 'PUT',
+      body: JSON.stringify(payload)
+    });
+  },
+
+  async updateRoleProfile(payload: any): Promise<{ success: boolean; user: Profile }> {
+    return request('/api/auth/role-profile', {
+      method: 'PUT',
+      body: JSON.stringify(payload)
+    });
+  },
+
+  async changeEmail(newEmail: string): Promise<{ success: boolean; email: string; message: string }> {
+    return request('/api/auth/change-email', {
+      method: 'POST',
+      body: JSON.stringify({ new_email: newEmail })
+    });
+  },
+
+  async updatePhone(phone: string): Promise<{ success: boolean; phone: string }> {
+    return request('/api/auth/phone', {
+      method: 'PUT',
+      body: JSON.stringify({ phone })
+    });
+  },
+
+  async getConnectedAccounts(): Promise<{ accounts: any[] }> {
+    return request('/api/auth/connected-accounts');
+  },
+
+  async disconnectAccount(provider: string): Promise<{ success: boolean; message: string }> {
+    return request(`/api/auth/connected-accounts/${provider}`, {
+      method: 'DELETE'
+    });
+  },
+
+  async getSecurityActivity(): Promise<{ activity: any[]; sessions: any[] }> {
+    return request('/api/auth/security/activity');
+  },
+
+  async logoutAllSessions(): Promise<{ success: boolean; message: string }> {
+    return request('/api/auth/security/logout-all', {
+      method: 'POST'
+    });
+  },
+
+  async exportPersonalData(): Promise<any> {
+    return request('/api/auth/export-data', {
+      method: 'POST'
+    });
+  },
+
+  async deactivateAccount(): Promise<{ success: boolean; message: string }> {
+    return request('/api/auth/deactivate', {
+      method: 'POST'
+    });
+  },
+
+  async deleteAccount(): Promise<{ success: boolean; message: string }> {
+    return request('/api/auth/account', {
+      method: 'DELETE'
+    });
+  },
+
+  async getBillingSummary(): Promise<{
+    credit_balance: number;
+    is_unlimited_credit_user: boolean;
+    total_spent: number;
+    total_purchases: number;
+    plan: string;
+    invoices: any[];
+    purchases: any[];
+  }> {
+    return request('/api/purchases/billing-summary');
+  },
+
+  // Auth Email Rate Limiting & Dispatch
+  async sendVerificationEmail(email: string): Promise<{ success: boolean; message: string; remaining: number }> {
+    return request('/api/auth/send-verification-email', {
+      method: 'POST',
+      body: JSON.stringify({ email })
+    });
+  },
+
+  async sendPasswordResetLink(email: string): Promise<{ success: boolean; message: string; remaining: number }> {
+    return request('/api/auth/send-password-reset-link', {
+      method: 'POST',
+      body: JSON.stringify({ email })
+    });
+  },
+
+  async sendPasswordResetOtp(email: string): Promise<{ success: boolean; message: string; remaining: number }> {
+    return request('/api/auth/send-password-reset-otp', {
+      method: 'POST',
+      body: JSON.stringify({ email })
+    });
+  },
+
+  async verifyPasswordResetOtp(payload: { email: string; otp: string; new_password: string }): Promise<{ success: boolean; message: string }> {
+    return request('/api/auth/verify-password-reset-otp', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  },
+
+  async getEmailRateLimitStatus(email: string, action: string): Promise<{
+    action: string;
+    allowed: boolean;
+    remaining: number;
+    limit: number;
+    total_attempts_in_window: number;
+    next_eligible_at: string | null;
+    retry_after_seconds: number;
+  }> {
+    const query = new URLSearchParams({ email, action }).toString();
+    return request(`/api/auth/rate-limit-status?${query}`);
+  },
+
+  async preSignupRateLimitCheck(email: string): Promise<{ allowed: boolean; remaining: number; attempt_id?: string }> {
+    return request('/api/auth/pre-signup-check', {
+      method: 'POST',
+      body: JSON.stringify({ email })
     });
   },
 

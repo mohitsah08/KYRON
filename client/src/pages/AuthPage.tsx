@@ -203,7 +203,24 @@ function useCooldown() {
     const t = setTimeout(() => setRemaining(r => r - 1), 1000);
     return () => clearTimeout(t);
   }, [remaining]);
-  return { remaining, start: () => setRemaining(RESEND_COOLDOWN_SECONDS) };
+  return {
+    remaining,
+    start: (seconds?: number) => setRemaining(seconds && seconds > 0 ? seconds : RESEND_COOLDOWN_SECONDS),
+    reset: () => setRemaining(0)
+  };
+}
+
+function formatRetryCountdown(seconds: number): string {
+  if (seconds <= 0) return '';
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+  if (minutes < 60) {
+    return remainingSeconds > 0 ? `${minutes}m ${remainingSeconds}s` : `${minutes}m`;
+  }
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  return `${hours}h ${remainingMinutes}m`;
 }
 
 /* ---------- Social sign-in ---------- */
@@ -446,8 +463,11 @@ function LoginForm({ next }: { next: string }) {
       cooldown.start();
       setFormError(null);
       setNotice(`We sent a new verification link to ${email.trim()}.`);
-    } catch (err) {
-      setFormError((err as Error).message);
+    } catch (err: any) {
+      setFormError(err.message);
+      if (err.retryAfterSeconds) {
+        cooldown.start(err.retryAfterSeconds);
+      }
     } finally {
       setResending(false);
     }
@@ -468,7 +488,7 @@ function LoginForm({ next }: { next: string }) {
                 disabled={resending || cooldown.remaining > 0}
                 className={`block mt-1.5 ${textLink} disabled:opacity-60 disabled:no-underline`}
               >
-                {resending ? 'Sending…' : cooldown.remaining > 0 ? `Resend available in ${cooldown.remaining}s` : 'Resend verification email'}
+                {resending ? 'Sending…' : cooldown.remaining > 0 ? `Resend available in ${formatRetryCountdown(cooldown.remaining)}` : 'Resend verification email'}
               </button>
             )}
           </Alert>
@@ -739,8 +759,11 @@ function CheckEmail({ email }: { email: string }) {
       await resendVerification(email);
       cooldown.start();
       setMessage({ tone: 'success', text: 'We sent you a new verification link.' });
-    } catch (err) {
-      setMessage({ tone: 'error', text: (err as Error).message });
+    } catch (err: any) {
+      setMessage({ tone: 'error', text: err.message });
+      if (err.retryAfterSeconds) {
+        cooldown.start(err.retryAfterSeconds);
+      }
     } finally {
       setSending(false);
     }
@@ -764,7 +787,7 @@ function CheckEmail({ email }: { email: string }) {
               <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> Sending…
             </>
           ) : cooldown.remaining > 0 ? (
-            `Resend email in ${cooldown.remaining}s`
+            `Resend email in ${formatRetryCountdown(cooldown.remaining)}`
           ) : (
             'Resend verification email'
           )}
@@ -782,46 +805,227 @@ function CheckEmail({ email }: { email: string }) {
 
 /* ---------- Forgot password ---------- */
 
+type RecoveryMethod = 'link' | 'otp';
+
 function ForgotPasswordForm() {
-  const { resetPassword } = useAuth();
+  const { navigate } = useRouter();
+  const { resetPassword, sendPasswordResetOtp, verifyPasswordResetOtp } = useAuth();
+  const [method, setMethod] = useState<RecoveryMethod>('link');
   const [email, setEmail] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const [emailError, setEmailError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [sentTo, setSentTo] = useState<string | null>(null);
-  const cooldown = useCooldown();
+  const [otpStep, setOtpStep] = useState(false);
+  const [otpCode, setOtpCode] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [otpErrors, setOtpErrors] = useState<{ otp?: string | null; password?: string | null; confirm?: string | null }>({});
+  const [resetSuccess, setResetSuccess] = useState(false);
+  const linkCooldown = useCooldown();
+  const otpCooldown = useCooldown();
 
-  const send = async (target: string) => {
+  const handleSendLink = async (target: string) => {
     setSubmitting(true);
     setFormError(null);
     try {
       await resetPassword(target);
       setSentTo(target);
-      cooldown.start();
-    } catch (err) {
-      setFormError((err as Error).message);
+      linkCooldown.start();
+    } catch (err: any) {
+      setFormError(err.message);
+      if (err.retryAfterSeconds) {
+        linkCooldown.start(err.retryAfterSeconds);
+      }
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSendOtp = async (target: string) => {
+    setSubmitting(true);
+    setFormError(null);
+    try {
+      await sendPasswordResetOtp(target);
+      setSentTo(target);
+      setOtpStep(true);
+      otpCooldown.start();
+    } catch (err: any) {
+      setFormError(err.message);
+      if (err.retryAfterSeconds) {
+        otpCooldown.start(err.retryAfterSeconds);
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleInitialSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (submitting) return;
     const invalid = validateEmail(email);
-    setError(invalid);
-    if (!invalid) void send(email.trim().toLowerCase());
+    setEmailError(invalid);
+    if (invalid) return;
+
+    const normalized = email.trim().toLowerCase();
+    if (method === 'link') {
+      void handleSendLink(normalized);
+    } else {
+      void handleSendOtp(normalized);
+    }
   };
 
-  if (sentTo) {
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (submitting || !sentTo) return;
+    setFormError(null);
+
+    const errors = {
+      otp: !otpCode.trim() ? 'Enter the 6-digit code.' : otpCode.trim().length !== 6 ? 'Code must be 6 digits.' : null,
+      password: validatePassword(newPassword),
+      confirm: !confirmPassword ? 'Confirm your password.' : confirmPassword !== newPassword ? 'Passwords don’t match.' : null
+    };
+    setOtpErrors(errors);
+    if (errors.otp || errors.password || errors.confirm) return;
+
+    setSubmitting(true);
+    try {
+      await verifyPasswordResetOtp(sentTo, otpCode.trim(), newPassword);
+      setResetSuccess(true);
+    } catch (err: any) {
+      setFormError(err.message || 'Verification failed. Please check the code and try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (resetSuccess) {
+    return (
+      <div className="space-y-5">
+        <StatusIcon tone="success" />
+        <Heading
+          title="Password updated"
+          subtitle="Your password has been reset successfully. You can now sign in with your new credentials."
+        />
+        <PrimaryAction onClick={() => navigate('/login', { replace: true })}>
+          Sign In Now
+        </PrimaryAction>
+      </div>
+    );
+  }
+
+  // OTP Step view
+  if (method === 'otp' && otpStep && sentTo) {
     return (
       <div className="space-y-5">
         <StatusIcon tone="mail" />
-        <Heading title="Check your email" subtitle={`If an account exists for ${sentTo}, you’ll receive a password reset link shortly.`} />
+        <Heading
+          title="Enter 6-digit code"
+          subtitle={`We sent an OTP code to ${sentTo}. Enter the code and set your new password.`}
+        />
+        {formError && <Alert tone="error">{formError}</Alert>}
+
+        <form onSubmit={handleVerifyOtp} noValidate className="space-y-4">
+          <Field
+            label="Verification code"
+            name="otp"
+            autoComplete="one-time-code"
+            inputMode="numeric"
+            maxLength={6}
+            placeholder="123456"
+            value={otpCode}
+            onChange={e => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+            error={otpErrors.otp}
+            disabled={submitting}
+          />
+
+          <PasswordField
+            label="New password"
+            name="new-password"
+            autoComplete="new-password"
+            placeholder="Create a new password"
+            value={newPassword}
+            onChange={e => setNewPassword(e.target.value)}
+            error={otpErrors.password}
+            hint={<StrengthMeter password={newPassword} />}
+            disabled={submitting}
+          />
+
+          <PasswordField
+            label="Confirm new password"
+            name="confirm-password"
+            autoComplete="new-password"
+            placeholder="Re-enter your password"
+            value={confirmPassword}
+            onChange={e => setConfirmPassword(e.target.value)}
+            error={otpErrors.confirm}
+            disabled={submitting}
+          />
+
+          <SubmitButton loading={submitting} loadingLabel="Verifying & updating…">
+            <span>Update Password</span>
+          </SubmitButton>
+        </form>
+
+        <div className="space-y-2.5 pt-2">
+          <button
+            type="button"
+            onClick={() => void handleSendOtp(sentTo)}
+            disabled={submitting || otpCooldown.remaining > 0}
+            className={secondaryButton}
+          >
+            {submitting ? (
+              'Sending…'
+            ) : otpCooldown.remaining > 0 ? (
+              `Resend code in ${formatRetryCountdown(otpCooldown.remaining)}`
+            ) : (
+              'Resend 6-digit code'
+            )}
+          </button>
+          <div className="flex items-center justify-between text-xs pt-1">
+            <button
+              type="button"
+              onClick={() => {
+                setOtpStep(false);
+                setFormError(null);
+              }}
+              className={textLink}
+            >
+              Use a different email
+            </button>
+            <Link href="/login" className={`flex items-center gap-1 ${textLink}`}>
+              <ArrowLeft className="w-3.5 h-3.5" aria-hidden="true" /> Back to Sign In
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Sent link confirmation view
+  if (method === 'link' && sentTo) {
+    return (
+      <div className="space-y-5">
+        <StatusIcon tone="mail" />
+        <Heading
+          title="Check your email"
+          subtitle={`If an account exists for ${sentTo}, you’ll receive a password reset link shortly.`}
+        />
         {formError && <Alert tone="error">{formError}</Alert>}
         <div className="space-y-2.5">
-          <button type="button" onClick={() => void send(sentTo)} disabled={submitting || cooldown.remaining > 0} className={secondaryButton}>
-            {submitting ? 'Sending…' : cooldown.remaining > 0 ? `Resend link in ${cooldown.remaining}s` : 'Resend reset link'}
+          <button
+            type="button"
+            onClick={() => void handleSendLink(sentTo)}
+            disabled={submitting || linkCooldown.remaining > 0}
+            className={secondaryButton}
+          >
+            {submitting ? (
+              'Sending…'
+            ) : linkCooldown.remaining > 0 ? (
+              `Resend link in ${formatRetryCountdown(linkCooldown.remaining)}`
+            ) : (
+              'Resend reset link'
+            )}
           </button>
           <Link href="/login" className={`flex items-center justify-center gap-1.5 text-sm py-2 ${textLink}`}>
             <ArrowLeft className="w-4 h-4" aria-hidden="true" /> Back to Sign In
@@ -834,7 +1038,40 @@ function ForgotPasswordForm() {
   return (
     <>
       <Heading mode="forgot-password" />
-      <form onSubmit={handleSubmit} noValidate className="space-y-4">
+
+      {/* Recovery Method Selector */}
+      <div className="mb-4 grid grid-cols-2 p-1 bg-[#F4F4F5] rounded-xl text-xs font-semibold">
+        <button
+          type="button"
+          onClick={() => {
+            setMethod('link');
+            setFormError(null);
+          }}
+          className={`py-2 rounded-lg transition-colors ${
+            method === 'link'
+              ? 'bg-white text-[#171717] shadow-xs'
+              : 'text-[#737373] hover:text-[#171717]'
+          }`}
+        >
+          Email Reset Link
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setMethod('otp');
+            setFormError(null);
+          }}
+          className={`py-2 rounded-lg transition-colors ${
+            method === 'otp'
+              ? 'bg-white text-[#171717] shadow-xs'
+              : 'text-[#737373] hover:text-[#171717]'
+          }`}
+        >
+          Email 6-Digit OTP
+        </button>
+      </div>
+
+      <form onSubmit={handleInitialSubmit} noValidate className="space-y-4">
         {formError && <Alert tone="error">{formError}</Alert>}
         <Field
           label="Email address"
@@ -845,11 +1082,18 @@ function ForgotPasswordForm() {
           placeholder="you@company.com"
           value={email}
           onChange={e => setEmail(e.target.value)}
-          error={error}
+          error={emailError}
           disabled={submitting}
         />
-        <SubmitButton loading={submitting} loadingLabel="Sending…">
-          <span>Send Reset Link</span>
+        <SubmitButton
+          loading={submitting}
+          disabled={
+            (method === 'link' && linkCooldown.remaining > 0) ||
+            (method === 'otp' && otpCooldown.remaining > 0)
+          }
+          loadingLabel="Sending…"
+        >
+          <span>{method === 'link' ? 'Send Reset Link' : 'Send 6-Digit Code'}</span>
         </SubmitButton>
       </form>
       <Link href="/login" className={`mt-6 flex items-center justify-center gap-1.5 text-sm ${textLink}`}>
@@ -980,7 +1224,7 @@ function ResetPasswordForm() {
 
 function AuthCallback({ next }: { next: string }) {
   const { navigate, query } = useRouter();
-  const { session, loading, resendVerification } = useAuth();
+  const { session, user, loading, resendVerification, loginWithToken } = useAuth();
   const urlError = useInitialUrlError();
   const isOAuth = query.get('flow') === 'oauth';
   const [exchangeError, setExchangeError] = useState<string | null>(null);
@@ -1007,7 +1251,20 @@ function AuthCallback({ next }: { next: string }) {
       .finally(() => setExchanging(false));
   }, [code, urlError, session, loading]);
 
-  const signedIn = Boolean(session?.user) && !urlError;
+  // Token-based OAuth callback from KYRON backend
+  const token = query.get('token');
+  useEffect(() => {
+    if (!token || exchanged.current || urlError || session || user) return;
+    exchanged.current = true;
+    setExchanging(true);
+    loginWithToken(token)
+      .catch(err => {
+        setExchangeError(friendlyAuthError(err, 'Failed to complete sign-in.'));
+      })
+      .finally(() => setExchanging(false));
+  }, [token, urlError, session, user, loginWithToken]);
+
+  const signedIn = (Boolean(session?.user) || Boolean(user)) && !urlError;
   const verified = signedIn && (isOAuth || Boolean(session?.user?.email_confirmed_at));
 
   useEffect(() => {
@@ -1047,7 +1304,7 @@ function AuthCallback({ next }: { next: string }) {
           subtitle={
             cancelled
               ? 'No changes were made. You can try again or use your email and password.'
-              : exchangeError || 'The sign-in attempt failed or expired. Please try again.'
+              : urlError?.description || exchangeError || 'The sign-in attempt failed or expired. Please try again.'
           }
         />
         <PrimaryAction onClick={() => navigate(withNext('/login', next), { replace: true })}>Back to Sign In</PrimaryAction>
@@ -1068,8 +1325,11 @@ function AuthCallback({ next }: { next: string }) {
       await resendVerification(email);
       cooldown.start();
       setResendState({ tone: 'success', text: 'If that address is waiting for verification, a new link is on its way.' });
-    } catch (err) {
-      setResendState({ tone: 'error', text: (err as Error).message });
+    } catch (err: any) {
+      setResendState({ tone: 'error', text: err.message });
+      if (err.retryAfterSeconds) {
+        cooldown.start(err.retryAfterSeconds);
+      }
     } finally {
       setSending(false);
     }
@@ -1099,7 +1359,7 @@ function AuthCallback({ next }: { next: string }) {
           disabled={sending}
         />
         <SubmitButton loading={sending} disabled={cooldown.remaining > 0} loadingLabel="Sending…">
-          {cooldown.remaining > 0 ? `Resend available in ${cooldown.remaining}s` : 'Send a new verification link'}
+          {cooldown.remaining > 0 ? `Resend available in ${formatRetryCountdown(cooldown.remaining)}` : 'Send a new verification link'}
         </SubmitButton>
       </form>
       <Link href="/login" className={`flex items-center justify-center gap-1.5 text-sm ${textLink}`}>

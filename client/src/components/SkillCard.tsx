@@ -17,7 +17,8 @@ export function SkillCard({ skill, onInstalled }: SkillCardProps) {
   const [installing, setInstalling] = useState(false);
   const [installed, setInstalled] = useState(false);
 
-  const isFree = skill.pricing_type === 'free' || skill.price === 0;
+  const isPaid = skill.pricing_type === 'paid' && Number(skill.price) > 0;
+  const isFree = !isPaid;
 
   // Derive latency estimate from skill ID or metadata
   const latencyMs = skill.slug.includes('octocode') ? 340 : skill.slug.includes('geo') ? 420 : 38;
@@ -125,7 +126,7 @@ export function SkillCard({ skill, onInstalled }: SkillCardProps) {
             {isFree ? (
               <span className="text-[#15803D]">Free</span>
             ) : (
-              <span>${skill.price.toFixed(2)}</span>
+              <span>${Number(skill.price || 0).toFixed(2)}</span>
             )}
           </span>
           {skill.deal_discount_percent ? (

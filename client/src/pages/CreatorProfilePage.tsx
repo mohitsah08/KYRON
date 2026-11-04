@@ -101,13 +101,22 @@ export function CreatorProfilePage({ username }: CreatorProfilePageProps) {
             {/* CTAs */}
             <div className="flex items-center gap-3 shrink-0 self-start lg:self-auto">
               {isOwnProfile ? (
-                <button 
-                  onClick={() => navigate('/creator-studio')}
-                  className="inline-flex items-center gap-2 px-4 h-9 rounded-lg bg-primary-container text-white hover:bg-accent-hover font-body-md font-medium transition-colors active:scale-[0.99] shadow-xs"
-                >
-                  <span className="material-symbols-outlined text-[18px]">palette</span>
-                  <span>Manage in Creator Studio</span>
-                </button>
+                <>
+                  <button 
+                    onClick={() => navigate('/profile')}
+                    className="inline-flex items-center gap-1.5 px-3.5 h-9 rounded-lg border border-border-subtle bg-bg-surface text-text-primary hover:border-border-strong font-body-md font-medium transition-colors"
+                  >
+                    <span className="material-symbols-outlined text-[18px] text-text-secondary">edit</span>
+                    <span>Edit Profile</span>
+                  </button>
+                  <button 
+                    onClick={() => navigate('/creator-studio')}
+                    className="inline-flex items-center gap-2 px-4 h-9 rounded-lg bg-primary-container text-white hover:bg-accent-hover font-body-md font-medium transition-colors active:scale-[0.99] shadow-xs"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">palette</span>
+                    <span>Manage in Creator Studio</span>
+                  </button>
+                </>
               ) : (
                 <button 
                   onClick={() => navigate('/creators')}

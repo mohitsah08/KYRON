@@ -58,13 +58,40 @@ export function translateSqlForPostgres(sql: string): string {
   return result;
 }
 
+export class AsyncMutex {
+  private queue: Array<() => void> = [];
+  private locked = false;
+
+  async acquire(): Promise<() => void> {
+    if (!this.locked) {
+      this.locked = true;
+      return () => this.release();
+    }
+    return new Promise((resolve) => {
+      this.queue.push(() => {
+        resolve(() => this.release());
+      });
+    });
+  }
+
+  private release(): void {
+    if (this.queue.length > 0) {
+      const next = this.queue.shift()!;
+      next();
+    } else {
+      this.locked = false;
+    }
+  }
+}
+
 class UniversalDatabase {
   public isPostgres: boolean;
   private pool: pg.Pool | null = null;
   private sqlite: DatabaseSync | null = null;
+  private txMutex = new AsyncMutex();
 
   constructor() {
-    this.isPostgres = process.env.NODE_ENV !== 'test' && !process.env.TEST_MODE && !!process.env.DATABASE_URL;
+    this.isPostgres = process.env.NODE_ENV !== 'test' && !process.env.TEST_MODE && !!process.env.DATABASE_URL && process.env.USE_SQLITE !== 'true';
 
     if (this.isPostgres) {
       const connectionString = process.env.DATABASE_URL!;
@@ -148,52 +175,57 @@ class UniversalDatabase {
   }
 
   async withTransaction<T>(callback: (tx: DatabaseExecutor) => Promise<T>): Promise<T> {
-    if (this.isPostgres) {
-      const client = await this.pool!.connect();
-      try {
-        await client.query('BEGIN');
-        const txExecutor: DatabaseExecutor = {
-          get: async <R = any>(sql: string, params?: any | any[]): Promise<R | null> => {
-            const norm = this.normalizeParams(params);
-            const pgSql = translateSqlForPostgres(sql);
-            const res = await client.query(pgSql, norm);
-            return (res.rows[0] as R) || null;
-          },
-          all: async <R = any>(sql: string, params?: any | any[]): Promise<R[]> => {
-            const norm = this.normalizeParams(params);
-            const pgSql = translateSqlForPostgres(sql);
-            const res = await client.query(pgSql, norm);
-            return res.rows as R[];
-          },
-          run: async (sql: string, params?: any | any[]): Promise<{ changes: number; lastInsertRowid?: any }> => {
-            const norm = this.normalizeParams(params);
-            const pgSql = translateSqlForPostgres(sql);
-            const res = await client.query(pgSql, norm);
-            return { changes: res.rowCount || 0 };
-          },
-          exec: async (sql: string): Promise<void> => {
-            await client.query(sql);
-          }
-        };
-        const result = await callback(txExecutor);
-        await client.query('COMMIT');
-        return result;
-      } catch (err) {
-        try { await client.query('ROLLBACK'); } catch {}
-        throw err;
-      } finally {
-        client.release();
+    const unlock = await this.txMutex.acquire();
+    try {
+      if (this.isPostgres) {
+        const client = await this.pool!.connect();
+        try {
+          await client.query('BEGIN');
+          const txExecutor: DatabaseExecutor = {
+            get: async <R = any>(sql: string, params?: any | any[]): Promise<R | null> => {
+              const norm = this.normalizeParams(params);
+              const pgSql = translateSqlForPostgres(sql);
+              const res = await client.query(pgSql, norm);
+              return (res.rows[0] as R) || null;
+            },
+            all: async <R = any>(sql: string, params?: any | any[]): Promise<R[]> => {
+              const norm = this.normalizeParams(params);
+              const pgSql = translateSqlForPostgres(sql);
+              const res = await client.query(pgSql, norm);
+              return res.rows as R[];
+            },
+            run: async (sql: string, params?: any | any[]): Promise<{ changes: number; lastInsertRowid?: any }> => {
+              const norm = this.normalizeParams(params);
+              const pgSql = translateSqlForPostgres(sql);
+              const res = await client.query(pgSql, norm);
+              return { changes: res.rowCount || 0 };
+            },
+            exec: async (sql: string): Promise<void> => {
+              await client.query(sql);
+            }
+          };
+          const result = await callback(txExecutor);
+          await client.query('COMMIT');
+          return result;
+        } catch (err) {
+          try { await client.query('ROLLBACK'); } catch {}
+          throw err;
+        } finally {
+          client.release();
+        }
+      } else {
+        this.sqlite!.exec('BEGIN IMMEDIATE;');
+        try {
+          const result = await callback(this);
+          this.sqlite!.exec('COMMIT;');
+          return result;
+        } catch (err) {
+          try { this.sqlite!.exec('ROLLBACK;'); } catch {}
+          throw err;
+        }
       }
-    } else {
-      this.sqlite!.exec('BEGIN IMMEDIATE;');
-      try {
-        const result = await callback(this);
-        this.sqlite!.exec('COMMIT;');
-        return result;
-      } catch (err) {
-        try { this.sqlite!.exec('ROLLBACK;'); } catch {}
-        throw err;
-      }
+    } finally {
+      unlock();
     }
   }
 
@@ -264,15 +296,105 @@ class UniversalDatabase {
       } catch (err: any) {
         console.warn('SQLite skills schema upgrade note:', err.message);
       }
-      try { this.sqlite!.exec('ALTER TABLE profiles ADD COLUMN full_name TEXT;'); } catch {}
-      try { this.sqlite!.exec("ALTER TABLE profiles ADD COLUMN role TEXT DEFAULT 'user';"); } catch {}
-      try { this.sqlite!.exec('ALTER TABLE profiles ADD COLUMN updated_at TEXT;'); } catch {}
-      try { this.sqlite!.exec("ALTER TABLE skills ADD COLUMN license TEXT DEFAULT 'MIT';"); } catch {}
-      try { this.sqlite!.exec("ALTER TABLE skill_packages ADD COLUMN storage_path TEXT;"); } catch {}
-      try { this.sqlite!.exec('ALTER TABLE profiles ADD COLUMN website_url TEXT;'); } catch {}
-      try { this.sqlite!.exec('ALTER TABLE profiles ADD COLUMN onboarding_completed INTEGER DEFAULT 0;'); } catch {}
-      try { this.sqlite!.exec("ALTER TABLE skills ADD COLUMN visibility TEXT DEFAULT 'public';"); } catch {}
-      try { this.sqlite!.exec('ALTER TABLE skills ADD COLUMN rejection_feedback TEXT;'); } catch {}
+      try { this.sqlite!.exec('ALTER TABLE profiles ADD COLUMN full_name TEXT;'); } catch { }
+      try { this.sqlite!.exec("ALTER TABLE profiles ADD COLUMN role TEXT DEFAULT 'user';"); } catch { }
+      try { this.sqlite!.exec('ALTER TABLE profiles ADD COLUMN updated_at TEXT;'); } catch { }
+      try { this.sqlite!.exec("ALTER TABLE skills ADD COLUMN license TEXT DEFAULT 'MIT';"); } catch { }
+      try { this.sqlite!.exec("ALTER TABLE skill_packages ADD COLUMN storage_path TEXT;"); } catch { }
+      try { this.sqlite!.exec('ALTER TABLE profiles ADD COLUMN website_url TEXT;'); } catch { }
+      try { this.sqlite!.exec('ALTER TABLE profiles ADD COLUMN onboarding_completed INTEGER DEFAULT 0;'); } catch { }
+      try { this.sqlite!.exec("ALTER TABLE skills ADD COLUMN visibility TEXT DEFAULT 'public';"); } catch { }
+      try { this.sqlite!.exec('ALTER TABLE skills ADD COLUMN rejection_feedback TEXT;'); } catch { }
+      try { this.sqlite!.exec('ALTER TABLE profiles ADD COLUMN first_name TEXT;'); } catch { }
+      try { this.sqlite!.exec('ALTER TABLE profiles ADD COLUMN last_name TEXT;'); } catch { }
+      try { this.sqlite!.exec('ALTER TABLE profiles ADD COLUMN cover_image_url TEXT;'); } catch { }
+      try { this.sqlite!.exec('ALTER TABLE profiles ADD COLUMN location TEXT;'); } catch { }
+      try { this.sqlite!.exec('ALTER TABLE profiles ADD COLUMN phone TEXT;'); } catch { }
+      try { this.sqlite!.exec('ALTER TABLE profiles ADD COLUMN social_links TEXT;'); } catch { }
+
+      try { this.sqlite!.exec('ALTER TABLE profiles ADD COLUMN creator_mode_enabled INTEGER DEFAULT 0;'); } catch { }
+      try { this.sqlite!.exec('ALTER TABLE profiles ADD COLUMN creator_display_name TEXT;'); } catch { }
+      try { this.sqlite!.exec('ALTER TABLE profiles ADD COLUMN creator_avatar_url TEXT;'); } catch { }
+      try { this.sqlite!.exec('ALTER TABLE profiles ADD COLUMN creator_cover_image_url TEXT;'); } catch { }
+      try { this.sqlite!.exec('ALTER TABLE profiles ADD COLUMN creator_headline TEXT;'); } catch { }
+      try { this.sqlite!.exec('ALTER TABLE profiles ADD COLUMN creator_bio TEXT;'); } catch { }
+      try { this.sqlite!.exec('ALTER TABLE profiles ADD COLUMN creator_skills TEXT;'); } catch { }
+      try { this.sqlite!.exec('ALTER TABLE profiles ADD COLUMN creator_categories TEXT;'); } catch { }
+      try { this.sqlite!.exec('ALTER TABLE profiles ADD COLUMN creator_portfolio TEXT;'); } catch { }
+      try { this.sqlite!.exec('ALTER TABLE profiles ADD COLUMN creator_links TEXT;'); } catch { }
+      try { this.sqlite!.exec('ALTER TABLE profiles ADD COLUMN creator_verified INTEGER DEFAULT 0;'); } catch { }
+      try { this.sqlite!.exec('ALTER TABLE profiles ADD COLUMN creator_storefront_slug TEXT;'); } catch { }
+
+      try { this.sqlite!.exec("ALTER TABLE profiles ADD COLUMN role_type TEXT DEFAULT 'individual';"); } catch { }
+      try { this.sqlite!.exec('ALTER TABLE profiles ADD COLUMN professional_title TEXT;'); } catch { }
+      try { this.sqlite!.exec('ALTER TABLE profiles ADD COLUMN skills_expertise TEXT;'); } catch { }
+      try { this.sqlite!.exec('ALTER TABLE profiles ADD COLUMN years_experience INTEGER DEFAULT 0;'); } catch { }
+      try { this.sqlite!.exec('ALTER TABLE profiles ADD COLUMN portfolio_items TEXT;'); } catch { }
+      try { this.sqlite!.exec('ALTER TABLE profiles ADD COLUMN services_offered TEXT;'); } catch { }
+      try { this.sqlite!.exec('ALTER TABLE profiles ADD COLUMN agency_name TEXT;'); } catch { }
+      try { this.sqlite!.exec('ALTER TABLE profiles ADD COLUMN agency_logo_url TEXT;'); } catch { }
+      try { this.sqlite!.exec('ALTER TABLE profiles ADD COLUMN agency_description TEXT;'); } catch { }
+      try { this.sqlite!.exec('ALTER TABLE profiles ADD COLUMN agency_website TEXT;'); } catch { }
+      try { this.sqlite!.exec('ALTER TABLE profiles ADD COLUMN agency_team_size TEXT;'); } catch { }
+      try { this.sqlite!.exec('ALTER TABLE profiles ADD COLUMN agency_designation TEXT;'); } catch { }
+      try { this.sqlite!.exec('ALTER TABLE profiles ADD COLUMN agency_permissions TEXT;'); } catch { }
+      try { this.sqlite!.exec('ALTER TABLE profiles ADD COLUMN company_name TEXT;'); } catch { }
+      try { this.sqlite!.exec('ALTER TABLE profiles ADD COLUMN company_industry TEXT;'); } catch { }
+      try { this.sqlite!.exec('ALTER TABLE profiles ADD COLUMN company_size TEXT;'); } catch { }
+      try { this.sqlite!.exec('ALTER TABLE profiles ADD COLUMN hiring_preferences TEXT;'); } catch { }
+
+      try { this.sqlite!.exec("ALTER TABLE profiles ADD COLUMN theme_preference TEXT DEFAULT 'system';"); } catch { }
+      try { this.sqlite!.exec("ALTER TABLE profiles ADD COLUMN language TEXT DEFAULT 'en';"); } catch { }
+      try { this.sqlite!.exec("ALTER TABLE profiles ADD COLUMN timezone TEXT DEFAULT 'UTC';"); } catch { }
+      try { this.sqlite!.exec('ALTER TABLE profiles ADD COLUMN notification_preferences TEXT;'); } catch { }
+      try { this.sqlite!.exec("ALTER TABLE profiles ADD COLUMN profile_visibility TEXT DEFAULT 'public';"); } catch { }
+      try { this.sqlite!.exec('ALTER TABLE profiles ADD COLUMN discoverability INTEGER DEFAULT 1;'); } catch { }
+      try { this.sqlite!.exec("ALTER TABLE profiles ADD COLUMN messaging_preference TEXT DEFAULT 'anyone';"); } catch { }
+      try { this.sqlite!.exec('ALTER TABLE profiles ADD COLUMN is_deactivated INTEGER DEFAULT 0;'); } catch { }
+      try { this.sqlite!.exec('ALTER TABLE profiles ADD COLUMN deactivated_at TEXT;'); } catch { }
+
+      try {
+        this.sqlite!.exec(`
+          CREATE TABLE IF NOT EXISTS oauth_accounts (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+            provider TEXT NOT NULL,
+            provider_user_id TEXT NOT NULL,
+            email TEXT,
+            created_at TEXT NOT NULL,
+            UNIQUE(provider, provider_user_id)
+          );
+          CREATE TABLE IF NOT EXISTS login_activity (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+            ip_address TEXT,
+            user_agent TEXT,
+            device_type TEXT,
+            location TEXT,
+            logged_in_at TEXT NOT NULL
+          );
+          CREATE TABLE IF NOT EXISTS active_sessions (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+            token_hash TEXT,
+            device_name TEXT,
+            ip_address TEXT,
+            last_active TEXT NOT NULL,
+            is_current INTEGER DEFAULT 0
+          );
+          CREATE TABLE IF NOT EXISTS auth_email_rate_limits (
+            id TEXT PRIMARY KEY,
+            email_hash TEXT NOT NULL,
+            action TEXT NOT NULL,
+            ip_address TEXT,
+            outcome TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            created_at_ms INTEGER NOT NULL
+          );
+          CREATE INDEX IF NOT EXISTS idx_rate_limits_email_action ON auth_email_rate_limits(email_hash, action, created_at_ms);
+          CREATE INDEX IF NOT EXISTS idx_rate_limits_ip ON auth_email_rate_limits(ip_address, created_at_ms);
+        `);
+      } catch { }
     }
   }
 

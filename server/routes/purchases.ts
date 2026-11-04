@@ -239,4 +239,55 @@ const getLibraryHandler = async (req: AuthRequest, res: Response) => {
 router.get('/library', requireAuth, getLibraryHandler);
 router.get('/my-library', requireAuth, getLibraryHandler);
 
+// 5. Billing Summary & Invoices
+router.get('/billing-summary', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user!.id;
+    const profile = await db.get(`SELECT credit_balance, is_unlimited_credit_user, created_at FROM profiles WHERE id = ?`, [userId]) as any;
+    if (!profile) {
+      res.status(404).json({ error: 'User profile not found' });
+      return;
+    }
+
+    const purchases = await db.all(`
+      SELECT p.id, p.user_id, p.skill_id, p.amount_paid, p.license_key, p.purchased_at, p.status,
+             s.name as skill_name, s.slug as skill_slug, s.category as skill_category,
+             pr.display_name as creator_name
+      FROM user_purchases p
+      JOIN skills s ON p.skill_id = s.id
+      JOIN profiles pr ON s.creator_id = pr.id
+      WHERE p.user_id = ?
+      ORDER BY p.purchased_at DESC
+    `, [userId]) as any[];
+
+    const invoices = purchases.map((p) => ({
+      id: `INV-${p.id.slice(0, 8).toUpperCase()}`,
+      purchase_id: p.id,
+      skill_id: p.skill_id,
+      skill_name: p.skill_name,
+      creator_name: p.creator_name,
+      amount: Number(p.amount_paid),
+      status: p.status || 'paid',
+      date: p.purchased_at,
+      payment_method: Number(p.amount_paid) > 0 ? 'KYRON Credit Balance' : 'Free 1-Click Acquisition',
+      license_key: p.license_key
+    }));
+
+    const totalSpent = purchases.reduce((sum, p) => sum + Number(p.amount_paid), 0);
+
+    res.json({
+      credit_balance: Number(profile.credit_balance),
+      is_unlimited_credit_user: profile.is_unlimited_credit_user === 1,
+      total_spent: Number(totalSpent.toFixed(2)),
+      total_purchases: purchases.length,
+      plan: profile.is_unlimited_credit_user === 1 ? 'KYRON Enterprise' : 'KYRON Standard (Pay-As-You-Go)',
+      invoices,
+      purchases
+    });
+  } catch (err: any) {
+    console.error('Billing summary error:', err.message);
+    res.status(500).json({ error: 'Failed to retrieve billing summary.' });
+  }
+});
+
 export default router;

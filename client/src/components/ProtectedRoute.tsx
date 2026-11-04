@@ -19,10 +19,10 @@ export function AuthLoadingScreen({ label = 'Loading your workspace…' }: { lab
 }
 
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const { session, loading } = useAuth();
+  const { session, user, loading } = useAuth();
   const { path, query, navigate } = useRouter();
 
-  const signedIn = Boolean(session?.user);
+  const signedIn = Boolean(session?.user || user);
   const search = query.toString();
 
   useEffect(() => {

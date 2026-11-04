@@ -19,10 +19,15 @@ import {
   Cpu
 } from 'lucide-react';
 
+function sanitizePricingFilter(val: string | null | undefined): string {
+  if (val === 'free' || val === 'paid') return val;
+  return 'all';
+}
+
 export function SkillsPage() {
   const { query, navigate } = useRouter();
   const initialCategory = query.get('category') || '';
-  const initialFilter = query.get('filter') || 'all';
+  const initialFilter = sanitizePricingFilter(query.get('filter') || query.get('pricing_type'));
   const initialSort = query.get('sort') || 'votes';
   const initialQ = query.get('q') || '';
 
@@ -43,7 +48,7 @@ export function SkillsPage() {
   // Sync state if query string changes
   useEffect(() => {
     setSelectedCategory(query.get('category') || '');
-    setSelectedFilter(query.get('filter') || 'all');
+    setSelectedFilter(sanitizePricingFilter(query.get('filter') || query.get('pricing_type')));
     setSelectedSort(query.get('sort') || 'votes');
     setSearchQuery(query.get('q') || '');
   }, [query.toString()]);
@@ -82,7 +87,7 @@ export function SkillsPage() {
   const updateUrl = (params: { category?: string; filter?: string; sort?: string; q?: string }) => {
     const sp = new URLSearchParams();
     const cat = params.category !== undefined ? params.category : selectedCategory;
-    const filt = params.filter !== undefined ? params.filter : selectedFilter;
+    const filt = params.filter !== undefined ? sanitizePricingFilter(params.filter) : selectedFilter;
     const srt = params.sort !== undefined ? params.sort : selectedSort;
     const q = params.q !== undefined ? params.q : searchQuery;
 
@@ -102,8 +107,9 @@ export function SkillsPage() {
   };
 
   const handleFilterSelect = (filterType: string) => {
-    setSelectedFilter(filterType);
-    updateUrl({ filter: filterType });
+    const cleanFilter = sanitizePricingFilter(filterType);
+    setSelectedFilter(cleanFilter);
+    updateUrl({ filter: cleanFilter });
   };
 
   const handleSortChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -243,7 +249,6 @@ export function SkillsPage() {
                   { id: 'all', label: 'All Models' },
                   { id: 'free', label: 'Free (1-Click)' },
                   { id: 'paid', label: 'Paid / Credit' },
-                  { id: 'subscription', label: 'Subscription' },
                 ].map((item) => (
                   <button
                     key={item.id}

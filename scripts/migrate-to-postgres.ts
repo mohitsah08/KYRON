@@ -2,6 +2,12 @@ import { DatabaseSync } from 'node:sqlite';
 import pg from 'pg';
 import path from 'node:path';
 import fs from 'node:fs';
+import dotenv from 'dotenv';
+
+if (fs.existsSync('.env.local')) {
+  dotenv.config({ path: '.env.local' });
+}
+dotenv.config();
 
 const { Pool } = pg;
 

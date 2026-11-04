@@ -226,7 +226,7 @@ export function Navbar() {
                         <LayoutDashboard className="w-4 h-4 text-[#737373]" />
                         <span>My Dashboard</span>
                       </Link>
-                      <Link href={`/creators/${user.username}`} role="menuitem" className="flex items-center gap-2.5 px-4 py-2 text-sm text-[#171717] hover:bg-[#F8F8F7] transition-colors">
+                      <Link href="/profile" role="menuitem" className="flex items-center gap-2.5 px-4 py-2 text-sm text-[#171717] hover:bg-[#F8F8F7] transition-colors">
                         <User className="w-4 h-4 text-[#737373]" />
                         <span>My Profile</span>
                       </Link>

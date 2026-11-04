@@ -47,12 +47,36 @@ function translateSqlForPostgres(sql) {
   }
   return result;
 }
+var AsyncMutex = class {
+  queue = [];
+  locked = false;
+  async acquire() {
+    if (!this.locked) {
+      this.locked = true;
+      return () => this.release();
+    }
+    return new Promise((resolve) => {
+      this.queue.push(() => {
+        resolve(() => this.release());
+      });
+    });
+  }
+  release() {
+    if (this.queue.length > 0) {
+      const next = this.queue.shift();
+      next();
+    } else {
+      this.locked = false;
+    }
+  }
+};
 var UniversalDatabase = class {
   isPostgres;
   pool = null;
   sqlite = null;
+  txMutex = new AsyncMutex();
   constructor() {
-    this.isPostgres = process.env.NODE_ENV !== "test" && !process.env.TEST_MODE && !!process.env.DATABASE_URL;
+    this.isPostgres = process.env.NODE_ENV !== "test" && !process.env.TEST_MODE && !!process.env.DATABASE_URL && process.env.USE_SQLITE !== "true";
     if (this.isPostgres) {
       const connectionString = process.env.DATABASE_URL;
       const isLocalhost = connectionString.includes("localhost") || connectionString.includes("127.0.0.1");
@@ -126,58 +150,63 @@ var UniversalDatabase = class {
     }
   }
   async withTransaction(callback) {
-    if (this.isPostgres) {
-      const client = await this.pool.connect();
-      try {
-        await client.query("BEGIN");
-        const txExecutor = {
-          get: async (sql, params) => {
-            const norm = this.normalizeParams(params);
-            const pgSql = translateSqlForPostgres(sql);
-            const res = await client.query(pgSql, norm);
-            return res.rows[0] || null;
-          },
-          all: async (sql, params) => {
-            const norm = this.normalizeParams(params);
-            const pgSql = translateSqlForPostgres(sql);
-            const res = await client.query(pgSql, norm);
-            return res.rows;
-          },
-          run: async (sql, params) => {
-            const norm = this.normalizeParams(params);
-            const pgSql = translateSqlForPostgres(sql);
-            const res = await client.query(pgSql, norm);
-            return { changes: res.rowCount || 0 };
-          },
-          exec: async (sql) => {
-            await client.query(sql);
+    const unlock = await this.txMutex.acquire();
+    try {
+      if (this.isPostgres) {
+        const client = await this.pool.connect();
+        try {
+          await client.query("BEGIN");
+          const txExecutor = {
+            get: async (sql, params) => {
+              const norm = this.normalizeParams(params);
+              const pgSql = translateSqlForPostgres(sql);
+              const res = await client.query(pgSql, norm);
+              return res.rows[0] || null;
+            },
+            all: async (sql, params) => {
+              const norm = this.normalizeParams(params);
+              const pgSql = translateSqlForPostgres(sql);
+              const res = await client.query(pgSql, norm);
+              return res.rows;
+            },
+            run: async (sql, params) => {
+              const norm = this.normalizeParams(params);
+              const pgSql = translateSqlForPostgres(sql);
+              const res = await client.query(pgSql, norm);
+              return { changes: res.rowCount || 0 };
+            },
+            exec: async (sql) => {
+              await client.query(sql);
+            }
+          };
+          const result = await callback(txExecutor);
+          await client.query("COMMIT");
+          return result;
+        } catch (err) {
+          try {
+            await client.query("ROLLBACK");
+          } catch {
           }
-        };
-        const result = await callback(txExecutor);
-        await client.query("COMMIT");
-        return result;
-      } catch (err) {
-        try {
-          await client.query("ROLLBACK");
-        } catch {
+          throw err;
+        } finally {
+          client.release();
         }
-        throw err;
-      } finally {
-        client.release();
-      }
-    } else {
-      this.sqlite.exec("BEGIN IMMEDIATE;");
-      try {
-        const result = await callback(this);
-        this.sqlite.exec("COMMIT;");
-        return result;
-      } catch (err) {
+      } else {
+        this.sqlite.exec("BEGIN IMMEDIATE;");
         try {
-          this.sqlite.exec("ROLLBACK;");
-        } catch {
+          const result = await callback(this);
+          this.sqlite.exec("COMMIT;");
+          return result;
+        } catch (err) {
+          try {
+            this.sqlite.exec("ROLLBACK;");
+          } catch {
+          }
+          throw err;
         }
-        throw err;
       }
+    } finally {
+      unlock();
     }
   }
   prepare(sql) {
@@ -280,6 +309,225 @@ var UniversalDatabase = class {
       }
       try {
         this.sqlite.exec("ALTER TABLE skills ADD COLUMN rejection_feedback TEXT;");
+      } catch {
+      }
+      try {
+        this.sqlite.exec("ALTER TABLE profiles ADD COLUMN first_name TEXT;");
+      } catch {
+      }
+      try {
+        this.sqlite.exec("ALTER TABLE profiles ADD COLUMN last_name TEXT;");
+      } catch {
+      }
+      try {
+        this.sqlite.exec("ALTER TABLE profiles ADD COLUMN cover_image_url TEXT;");
+      } catch {
+      }
+      try {
+        this.sqlite.exec("ALTER TABLE profiles ADD COLUMN location TEXT;");
+      } catch {
+      }
+      try {
+        this.sqlite.exec("ALTER TABLE profiles ADD COLUMN phone TEXT;");
+      } catch {
+      }
+      try {
+        this.sqlite.exec("ALTER TABLE profiles ADD COLUMN social_links TEXT;");
+      } catch {
+      }
+      try {
+        this.sqlite.exec("ALTER TABLE profiles ADD COLUMN creator_mode_enabled INTEGER DEFAULT 0;");
+      } catch {
+      }
+      try {
+        this.sqlite.exec("ALTER TABLE profiles ADD COLUMN creator_display_name TEXT;");
+      } catch {
+      }
+      try {
+        this.sqlite.exec("ALTER TABLE profiles ADD COLUMN creator_avatar_url TEXT;");
+      } catch {
+      }
+      try {
+        this.sqlite.exec("ALTER TABLE profiles ADD COLUMN creator_cover_image_url TEXT;");
+      } catch {
+      }
+      try {
+        this.sqlite.exec("ALTER TABLE profiles ADD COLUMN creator_headline TEXT;");
+      } catch {
+      }
+      try {
+        this.sqlite.exec("ALTER TABLE profiles ADD COLUMN creator_bio TEXT;");
+      } catch {
+      }
+      try {
+        this.sqlite.exec("ALTER TABLE profiles ADD COLUMN creator_skills TEXT;");
+      } catch {
+      }
+      try {
+        this.sqlite.exec("ALTER TABLE profiles ADD COLUMN creator_categories TEXT;");
+      } catch {
+      }
+      try {
+        this.sqlite.exec("ALTER TABLE profiles ADD COLUMN creator_portfolio TEXT;");
+      } catch {
+      }
+      try {
+        this.sqlite.exec("ALTER TABLE profiles ADD COLUMN creator_links TEXT;");
+      } catch {
+      }
+      try {
+        this.sqlite.exec("ALTER TABLE profiles ADD COLUMN creator_verified INTEGER DEFAULT 0;");
+      } catch {
+      }
+      try {
+        this.sqlite.exec("ALTER TABLE profiles ADD COLUMN creator_storefront_slug TEXT;");
+      } catch {
+      }
+      try {
+        this.sqlite.exec("ALTER TABLE profiles ADD COLUMN role_type TEXT DEFAULT 'individual';");
+      } catch {
+      }
+      try {
+        this.sqlite.exec("ALTER TABLE profiles ADD COLUMN professional_title TEXT;");
+      } catch {
+      }
+      try {
+        this.sqlite.exec("ALTER TABLE profiles ADD COLUMN skills_expertise TEXT;");
+      } catch {
+      }
+      try {
+        this.sqlite.exec("ALTER TABLE profiles ADD COLUMN years_experience INTEGER DEFAULT 0;");
+      } catch {
+      }
+      try {
+        this.sqlite.exec("ALTER TABLE profiles ADD COLUMN portfolio_items TEXT;");
+      } catch {
+      }
+      try {
+        this.sqlite.exec("ALTER TABLE profiles ADD COLUMN services_offered TEXT;");
+      } catch {
+      }
+      try {
+        this.sqlite.exec("ALTER TABLE profiles ADD COLUMN agency_name TEXT;");
+      } catch {
+      }
+      try {
+        this.sqlite.exec("ALTER TABLE profiles ADD COLUMN agency_logo_url TEXT;");
+      } catch {
+      }
+      try {
+        this.sqlite.exec("ALTER TABLE profiles ADD COLUMN agency_description TEXT;");
+      } catch {
+      }
+      try {
+        this.sqlite.exec("ALTER TABLE profiles ADD COLUMN agency_website TEXT;");
+      } catch {
+      }
+      try {
+        this.sqlite.exec("ALTER TABLE profiles ADD COLUMN agency_team_size TEXT;");
+      } catch {
+      }
+      try {
+        this.sqlite.exec("ALTER TABLE profiles ADD COLUMN agency_designation TEXT;");
+      } catch {
+      }
+      try {
+        this.sqlite.exec("ALTER TABLE profiles ADD COLUMN agency_permissions TEXT;");
+      } catch {
+      }
+      try {
+        this.sqlite.exec("ALTER TABLE profiles ADD COLUMN company_name TEXT;");
+      } catch {
+      }
+      try {
+        this.sqlite.exec("ALTER TABLE profiles ADD COLUMN company_industry TEXT;");
+      } catch {
+      }
+      try {
+        this.sqlite.exec("ALTER TABLE profiles ADD COLUMN company_size TEXT;");
+      } catch {
+      }
+      try {
+        this.sqlite.exec("ALTER TABLE profiles ADD COLUMN hiring_preferences TEXT;");
+      } catch {
+      }
+      try {
+        this.sqlite.exec("ALTER TABLE profiles ADD COLUMN theme_preference TEXT DEFAULT 'system';");
+      } catch {
+      }
+      try {
+        this.sqlite.exec("ALTER TABLE profiles ADD COLUMN language TEXT DEFAULT 'en';");
+      } catch {
+      }
+      try {
+        this.sqlite.exec("ALTER TABLE profiles ADD COLUMN timezone TEXT DEFAULT 'UTC';");
+      } catch {
+      }
+      try {
+        this.sqlite.exec("ALTER TABLE profiles ADD COLUMN notification_preferences TEXT;");
+      } catch {
+      }
+      try {
+        this.sqlite.exec("ALTER TABLE profiles ADD COLUMN profile_visibility TEXT DEFAULT 'public';");
+      } catch {
+      }
+      try {
+        this.sqlite.exec("ALTER TABLE profiles ADD COLUMN discoverability INTEGER DEFAULT 1;");
+      } catch {
+      }
+      try {
+        this.sqlite.exec("ALTER TABLE profiles ADD COLUMN messaging_preference TEXT DEFAULT 'anyone';");
+      } catch {
+      }
+      try {
+        this.sqlite.exec("ALTER TABLE profiles ADD COLUMN is_deactivated INTEGER DEFAULT 0;");
+      } catch {
+      }
+      try {
+        this.sqlite.exec("ALTER TABLE profiles ADD COLUMN deactivated_at TEXT;");
+      } catch {
+      }
+      try {
+        this.sqlite.exec(`
+          CREATE TABLE IF NOT EXISTS oauth_accounts (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+            provider TEXT NOT NULL,
+            provider_user_id TEXT NOT NULL,
+            email TEXT,
+            created_at TEXT NOT NULL,
+            UNIQUE(provider, provider_user_id)
+          );
+          CREATE TABLE IF NOT EXISTS login_activity (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+            ip_address TEXT,
+            user_agent TEXT,
+            device_type TEXT,
+            location TEXT,
+            logged_in_at TEXT NOT NULL
+          );
+          CREATE TABLE IF NOT EXISTS active_sessions (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+            token_hash TEXT,
+            device_name TEXT,
+            ip_address TEXT,
+            last_active TEXT NOT NULL,
+            is_current INTEGER DEFAULT 0
+          );
+          CREATE TABLE IF NOT EXISTS auth_email_rate_limits (
+            id TEXT PRIMARY KEY,
+            email_hash TEXT NOT NULL,
+            action TEXT NOT NULL,
+            ip_address TEXT,
+            outcome TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            created_at_ms INTEGER NOT NULL
+          );
+          CREATE INDEX IF NOT EXISTS idx_rate_limits_email_action ON auth_email_rate_limits(email_hash, action, created_at_ms);
+          CREATE INDEX IF NOT EXISTS idx_rate_limits_ip ON auth_email_rate_limits(ip_address, created_at_ms);
+        `);
       } catch {
       }
     }
@@ -896,7 +1144,38 @@ router.get("/deals", async (_req, res) => {
 });
 router.get("/", optionalAuth, async (req, res) => {
   try {
-    const { category, pricing_type, creator, q, sort = "trending", limit = 50, offset = 0 } = req.query;
+    const { category, creator, q, sort = "trending", limit = 50, offset = 0 } = req.query;
+    const filterParam = typeof req.query.pricing_type === "string" && req.query.pricing_type.trim() ? req.query.pricing_type.trim().toLowerCase() : typeof req.query.filter === "string" && req.query.filter.trim() ? req.query.filter.trim().toLowerCase() : void 0;
+    let whereSql = ` WHERE s.status IN ('live', 'published')`;
+    const params = [];
+    if (creator && typeof creator === "string" && creator.trim()) {
+      whereSql += ` AND (p.username = ? OR p.id = ?)`;
+      params.push(creator.trim(), creator.trim());
+    }
+    if (category && typeof category === "string" && category !== "all") {
+      whereSql += ` AND s.category = ?`;
+      params.push(category);
+    }
+    if (filterParam === "free") {
+      whereSql += ` AND s.pricing_type = 'free' AND (s.price IS NULL OR s.price = 0)`;
+    } else if (filterParam === "paid") {
+      whereSql += ` AND s.pricing_type = 'paid' AND s.price > 0`;
+    } else if (filterParam && filterParam !== "all") {
+      whereSql += ` AND 1 = 0`;
+    }
+    if (q && typeof q === "string" && q.trim()) {
+      const searchTerm = `%${q.trim()}%`;
+      whereSql += ` AND (s.name LIKE ? OR s.summary LIKE ? OR s.tags LIKE ? OR p.display_name LIKE ?)`;
+      params.push(searchTerm, searchTerm, searchTerm, searchTerm);
+    }
+    const countSql = `
+      SELECT COUNT(*) as total
+      FROM skills s
+      JOIN profiles p ON s.creator_id = p.id
+      ${whereSql}
+    `;
+    const countRow = await db.get(countSql, params);
+    const total = countRow ? Number(countRow.total || 0) : 0;
     let querySql = `
       SELECT s.id, s.name, s.slug, s.summary, s.category, s.tags, s.logo_url,
              s.pricing_type, s.price, s.subscription_price_monthly, s.compatibility_type,
@@ -907,27 +1186,8 @@ router.get("/", optionalAuth, async (req, res) => {
       FROM skills s
       JOIN profiles p ON s.creator_id = p.id
       LEFT JOIN skill_deals d ON d.skill_id = s.id AND d.is_active = 1 AND datetime(d.expires_at) > datetime('now')
-      WHERE s.status IN ('live', 'published')
+      ${whereSql}
     `;
-    const params = [];
-    if (creator && typeof creator === "string" && creator.trim()) {
-      querySql += ` AND (p.username = ? OR p.id = ?)`;
-      params.push(creator.trim(), creator.trim());
-    }
-    if (category && typeof category === "string" && category !== "all") {
-      querySql += ` AND s.category = ?`;
-      params.push(category);
-    }
-    if (pricing_type === "free") {
-      querySql += ` AND (s.pricing_type = 'free' OR s.price = 0)`;
-    } else if (pricing_type === "paid") {
-      querySql += ` AND (s.pricing_type = 'paid' OR s.pricing_type = 'subscription' OR s.price > 0)`;
-    }
-    if (q && typeof q === "string" && q.trim()) {
-      const searchTerm = `%${q.trim()}%`;
-      querySql += ` AND (s.name LIKE ? OR s.summary LIKE ? OR s.tags LIKE ? OR p.display_name LIKE ?)`;
-      params.push(searchTerm, searchTerm, searchTerm, searchTerm);
-    }
     switch (sort) {
       case "newest":
         querySql += ` ORDER BY s.created_at DESC`;
@@ -938,6 +1198,7 @@ router.get("/", optionalAuth, async (req, res) => {
       case "rating":
         querySql += ` ORDER BY s.average_rating DESC, s.review_count DESC`;
         break;
+      case "popular":
       case "installs":
         querySql += ` ORDER BY s.install_count DESC`;
         break;
@@ -953,8 +1214,7 @@ router.get("/", optionalAuth, async (req, res) => {
         break;
     }
     querySql += ` LIMIT ? OFFSET ?`;
-    params.push(Number(limit), Number(offset));
-    const rows = await db.all(querySql, params);
+    const rows = await db.all(querySql, [...params, Number(limit), Number(offset)]);
     const formatted = rows.map((r) => {
       let parsedTags = [];
       try {
@@ -966,9 +1226,11 @@ router.get("/", optionalAuth, async (req, res) => {
         expires_at: r.deal_expires_at,
         discounted_price: Number((Number(r.price) * (1 - Number(r.discount_percent) / 100)).toFixed(2))
       } : null;
+      const safePricingType = r.pricing_type === "free" ? "free" : "paid";
       return {
         ...r,
-        price: Number(r.price),
+        pricing_type: safePricingType,
+        price: safePricingType === "free" ? 0 : Number(r.price),
         net_votes: Number(r.net_votes),
         average_rating: Number(r.average_rating),
         review_count: Number(r.review_count),
@@ -978,7 +1240,7 @@ router.get("/", optionalAuth, async (req, res) => {
         deal
       };
     });
-    res.json({ skills: formatted, count: formatted.length });
+    res.json({ skills: formatted, count: formatted.length, total });
   } catch (err) {
     console.error("Skills browse error:", err.message);
     res.status(500).json({ error: "Failed to retrieve skills catalog." });
@@ -1575,6 +1837,51 @@ var getLibraryHandler = async (req, res) => {
 };
 router3.get("/library", requireAuth, getLibraryHandler);
 router3.get("/my-library", requireAuth, getLibraryHandler);
+router3.get("/billing-summary", requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const profile = await db.get(`SELECT credit_balance, is_unlimited_credit_user, created_at FROM profiles WHERE id = ?`, [userId]);
+    if (!profile) {
+      res.status(404).json({ error: "User profile not found" });
+      return;
+    }
+    const purchases = await db.all(`
+      SELECT p.id, p.user_id, p.skill_id, p.amount_paid, p.license_key, p.purchased_at, p.status,
+             s.name as skill_name, s.slug as skill_slug, s.category as skill_category,
+             pr.display_name as creator_name
+      FROM user_purchases p
+      JOIN skills s ON p.skill_id = s.id
+      JOIN profiles pr ON s.creator_id = pr.id
+      WHERE p.user_id = ?
+      ORDER BY p.purchased_at DESC
+    `, [userId]);
+    const invoices = purchases.map((p) => ({
+      id: `INV-${p.id.slice(0, 8).toUpperCase()}`,
+      purchase_id: p.id,
+      skill_id: p.skill_id,
+      skill_name: p.skill_name,
+      creator_name: p.creator_name,
+      amount: Number(p.amount_paid),
+      status: p.status || "paid",
+      date: p.purchased_at,
+      payment_method: Number(p.amount_paid) > 0 ? "KYRON Credit Balance" : "Free 1-Click Acquisition",
+      license_key: p.license_key
+    }));
+    const totalSpent = purchases.reduce((sum, p) => sum + Number(p.amount_paid), 0);
+    res.json({
+      credit_balance: Number(profile.credit_balance),
+      is_unlimited_credit_user: profile.is_unlimited_credit_user === 1,
+      total_spent: Number(totalSpent.toFixed(2)),
+      total_purchases: purchases.length,
+      plan: profile.is_unlimited_credit_user === 1 ? "KYRON Enterprise" : "KYRON Standard (Pay-As-You-Go)",
+      invoices,
+      purchases
+    });
+  } catch (err) {
+    console.error("Billing summary error:", err.message);
+    res.status(500).json({ error: "Failed to retrieve billing summary." });
+  }
+});
 var purchases_default = router3;
 
 // server/routes/creator.ts
@@ -2832,8 +3139,603 @@ var creator_default = router4;
 
 // server/routes/auth.ts
 import { Router as Router5 } from "express";
-import bcrypt from "bcryptjs";
+
+// server/services/emailRateLimiter.ts
 import crypto4 from "node:crypto";
+var VALID_AUTH_EMAIL_ACTIONS = [
+  "signup_verification",
+  "password_reset_link",
+  "password_reset_otp"
+];
+var EMAIL_RATE_LIMIT_WINDOW_MS = 24 * 60 * 60 * 1e3;
+var EMAIL_RATE_LIMIT_MAX = 3;
+var IP_RATE_LIMIT_MAX = 25;
+var IP_RATE_LIMIT_WINDOW_MS = 24 * 60 * 60 * 1e3;
+var RATE_LIMIT_EXCEEDED_MESSAGE = "You've reached the maximum of 3 email requests within 24 hours. Please try again later.";
+function normalizeEmail(email) {
+  return (email || "").trim().toLowerCase();
+}
+function hashEmail(normalizedEmail) {
+  return crypto4.createHash("sha256").update(normalizedEmail).digest("hex");
+}
+async function consumeEmailRateLimit(rawEmail, action, ipAddress) {
+  const normalized = normalizeEmail(rawEmail);
+  if (!normalized || !normalized.includes("@")) {
+    return {
+      allowed: false,
+      remaining: 0,
+      totalAttemptsInWindow: 0,
+      limit: EMAIL_RATE_LIMIT_MAX,
+      reason: "Please provide a valid email address."
+    };
+  }
+  const emailHash = hashEmail(normalized);
+  const now = Date.now();
+  const emailWindowStart = now - EMAIL_RATE_LIMIT_WINDOW_MS;
+  const ipWindowStart = now - IP_RATE_LIMIT_WINDOW_MS;
+  return db.withTransaction(async (tx) => {
+    if (db.isPostgres) {
+      try {
+        await tx.run("SELECT pg_advisory_xact_lock(hashtext(?))", [`email_rate:${emailHash}:${action}`]);
+      } catch {
+      }
+    }
+    if (ipAddress && ipAddress !== "127.0.0.1" && ipAddress !== "::1") {
+      const ipRows = await tx.all(
+        `SELECT COUNT(*) as count FROM auth_email_rate_limits
+         WHERE ip_address = ? AND created_at_ms >= ? AND outcome IN ('attempt', 'sent', 'provider_error')`,
+        [ipAddress, ipWindowStart]
+      );
+      const ipCount = Number(ipRows[0]?.count || 0);
+      if (ipCount >= IP_RATE_LIMIT_MAX) {
+        const blockedId = "rat_ip_" + crypto4.randomUUID();
+        await tx.run(
+          `INSERT INTO auth_email_rate_limits (id, email_hash, action, ip_address, outcome, created_at, created_at_ms)
+           VALUES (?, ?, ?, ?, 'ip_blocked', ?, ?)`,
+          [blockedId, emailHash, action, ipAddress, new Date(now).toISOString(), now]
+        );
+        console.warn(JSON.stringify({
+          event: "auth_email_ip_rate_limit_blocked",
+          action,
+          ip: ipAddress,
+          count: ipCount,
+          timestamp: new Date(now).toISOString()
+        }));
+        return {
+          allowed: false,
+          remaining: 0,
+          totalAttemptsInWindow: ipCount,
+          limit: IP_RATE_LIMIT_MAX,
+          retryAfterSeconds: 3600,
+          reason: "Too many requests from this network. Please try again later."
+        };
+      }
+    }
+    const attempts = await tx.all(
+      `SELECT id, created_at_ms FROM auth_email_rate_limits
+       WHERE email_hash = ? AND action = ? AND created_at_ms >= ? AND outcome IN ('attempt', 'sent', 'provider_error')
+       ORDER BY created_at_ms ASC`,
+      [emailHash, action, emailWindowStart]
+    );
+    const totalInWindow = attempts.length;
+    if (totalInWindow >= EMAIL_RATE_LIMIT_MAX) {
+      const oldestAttempt = attempts[0];
+      const oldestMs = Number(oldestAttempt.created_at_ms);
+      const nextEligibleMs = oldestMs + EMAIL_RATE_LIMIT_WINDOW_MS;
+      const retryAfterSeconds = Math.max(1, Math.ceil((nextEligibleMs - now) / 1e3));
+      const nextEligibleDate = new Date(nextEligibleMs);
+      const blockedId = "rat_blk_" + crypto4.randomUUID();
+      await tx.run(
+        `INSERT INTO auth_email_rate_limits (id, email_hash, action, ip_address, outcome, created_at, created_at_ms)
+         VALUES (?, ?, ?, ?, 'rate_limited', ?, ?)`,
+        [blockedId, emailHash, action, ipAddress || null, new Date(now).toISOString(), now]
+      );
+      console.warn(JSON.stringify({
+        event: "auth_email_rate_limit_blocked",
+        action,
+        email_hash: emailHash,
+        attempts_in_window: totalInWindow,
+        next_eligible_at: nextEligibleDate.toISOString(),
+        ip: ipAddress || "unknown",
+        timestamp: new Date(now).toISOString()
+      }));
+      return {
+        allowed: false,
+        remaining: 0,
+        totalAttemptsInWindow: totalInWindow,
+        totalAttempts: totalInWindow,
+        limit: EMAIL_RATE_LIMIT_MAX,
+        nextEligibleAt: nextEligibleDate,
+        retryAfterSeconds,
+        reason: RATE_LIMIT_EXCEEDED_MESSAGE,
+        message: RATE_LIMIT_EXCEEDED_MESSAGE
+      };
+    }
+    const attemptId = "rat_" + crypto4.randomUUID();
+    await tx.run(
+      `INSERT INTO auth_email_rate_limits (id, email_hash, action, ip_address, outcome, created_at, created_at_ms)
+       VALUES (?, ?, ?, ?, 'attempt', ?, ?)`,
+      [attemptId, emailHash, action, ipAddress || null, new Date(now).toISOString(), now]
+    );
+    const remaining = EMAIL_RATE_LIMIT_MAX - (totalInWindow + 1);
+    console.info(JSON.stringify({
+      event: "auth_email_rate_limit_granted",
+      action,
+      email_hash: emailHash,
+      attempt_number: totalInWindow + 1,
+      remaining,
+      ip: ipAddress || "unknown",
+      timestamp: new Date(now).toISOString()
+    }));
+    return {
+      allowed: true,
+      remaining,
+      totalAttemptsInWindow: totalInWindow + 1,
+      totalAttempts: totalInWindow + 1,
+      limit: EMAIL_RATE_LIMIT_MAX,
+      attemptId
+    };
+  });
+}
+async function checkEmailRateLimit(rawEmail, action) {
+  const normalized = normalizeEmail(rawEmail);
+  const emailHash = hashEmail(normalized);
+  const now = Date.now();
+  const emailWindowStart = now - EMAIL_RATE_LIMIT_WINDOW_MS;
+  const attempts = await db.all(
+    `SELECT id, created_at_ms FROM auth_email_rate_limits
+     WHERE email_hash = ? AND action = ? AND created_at_ms >= ? AND outcome IN ('attempt', 'sent', 'provider_error')
+     ORDER BY created_at_ms ASC`,
+    [emailHash, action, emailWindowStart]
+  );
+  const totalInWindow = attempts.length;
+  const allowed = totalInWindow < EMAIL_RATE_LIMIT_MAX;
+  const remaining = Math.max(0, EMAIL_RATE_LIMIT_MAX - totalInWindow);
+  let nextEligibleAt = null;
+  let retryAfterSeconds = 0;
+  if (totalInWindow >= EMAIL_RATE_LIMIT_MAX) {
+    const oldest = attempts[0];
+    const oldestMs = Number(oldest.created_at_ms);
+    const nextEligibleMs = oldestMs + EMAIL_RATE_LIMIT_WINDOW_MS;
+    nextEligibleAt = new Date(nextEligibleMs);
+    retryAfterSeconds = Math.max(0, Math.ceil((nextEligibleMs - now) / 1e3));
+  }
+  return {
+    action,
+    allowed,
+    remaining,
+    limit: EMAIL_RATE_LIMIT_MAX,
+    totalAttemptsInWindow: totalInWindow,
+    nextEligibleAt,
+    retryAfterSeconds
+  };
+}
+async function markEmailRateLimitSuccess(attemptId) {
+  if (!attemptId) return;
+  try {
+    await db.run(
+      `UPDATE auth_email_rate_limits SET outcome = 'sent' WHERE id = ?`,
+      [attemptId]
+    );
+  } catch (err) {
+    console.warn("Failed to mark rate limit success:", err.message);
+  }
+}
+async function markEmailRateLimitError(attemptId) {
+  if (!attemptId) return;
+  try {
+    await db.run(
+      `UPDATE auth_email_rate_limits SET outcome = 'provider_error' WHERE id = ?`,
+      [attemptId]
+    );
+  } catch (err) {
+    console.warn("Failed to mark rate limit error:", err.message);
+  }
+}
+
+// server/routes/auth.ts
+import bcrypt from "bcryptjs";
+import crypto6 from "node:crypto";
+
+// server/services/oauthService.ts
+import crypto5 from "node:crypto";
+var JWT_SECRET2 = process.env.JWT_SECRET || "kyron-super-secret-jwt-key-2026";
+function getOAuthStatus() {
+  return {
+    google: Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
+    github: Boolean(process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET)
+  };
+}
+function getOAuthCallbackUrl(provider, req) {
+  if (process.env.AUTH_CALLBACK_URL) {
+    return process.env.AUTH_CALLBACK_URL.replace(":provider", provider);
+  }
+  let baseUrl = process.env.APP_URL;
+  if (!baseUrl && req) {
+    const proto = req.headers["x-forwarded-proto"] || req.protocol || "http";
+    const host = req.headers["x-forwarded-host"] || req.get?.("host") || "localhost:3000";
+    baseUrl = `${proto}://${host}`;
+  }
+  if (!baseUrl) {
+    baseUrl = "http://localhost:3000";
+  }
+  return `${baseUrl.replace(/\/+$/, "")}/api/auth/oauth/${provider}/callback`;
+}
+function sanitizeNextPath(next) {
+  if (!next) return "/dashboard";
+  let decoded;
+  try {
+    decoded = decodeURIComponent(next).trim();
+  } catch {
+    return "/dashboard";
+  }
+  if (!decoded.startsWith("/") || decoded.startsWith("//") || decoded.includes("\\")) {
+    return "/dashboard";
+  }
+  const disallowed = ["/login", "/signup", "/auth", "/forgot-password", "/reset-password", "/auth/callback"];
+  const base = decoded.split(/[?#]/)[0];
+  if (disallowed.includes(base)) {
+    return "/dashboard";
+  }
+  return decoded;
+}
+function createOAuthState(provider, next) {
+  const nonce = crypto5.randomBytes(16).toString("hex");
+  const issuedAt = Date.now();
+  const safeNext = sanitizeNextPath(next);
+  const dataToSign = `${nonce}:${provider}:${issuedAt}:${safeNext}`;
+  const sig = crypto5.createHmac("sha256", JWT_SECRET2).update(dataToSign).digest("hex");
+  const payload = {
+    nonce,
+    provider,
+    issuedAt,
+    next: safeNext,
+    sig
+  };
+  return Buffer.from(JSON.stringify(payload)).toString("base64url");
+}
+function verifyOAuthState(stateStr, expectedProvider) {
+  if (!stateStr || typeof stateStr !== "string") {
+    return { valid: false, next: "/dashboard", error: "Missing OAuth state parameter" };
+  }
+  let payload;
+  try {
+    const json = Buffer.from(stateStr, "base64url").toString("utf-8");
+    payload = JSON.parse(json);
+  } catch {
+    return { valid: false, next: "/dashboard", error: "Malformed OAuth state parameter" };
+  }
+  const { nonce, provider, issuedAt, next, sig } = payload || {};
+  if (!nonce || !provider || !issuedAt || !sig) {
+    return { valid: false, next: "/dashboard", error: "Incomplete OAuth state structure" };
+  }
+  if (provider !== expectedProvider) {
+    return { valid: false, next: "/dashboard", error: "Provider mismatch in OAuth state" };
+  }
+  const ageMs = Date.now() - Number(issuedAt);
+  if (isNaN(ageMs) || ageMs < 0 || ageMs > 15 * 60 * 1e3) {
+    return { valid: false, next: sanitizeNextPath(next), error: "OAuth state has expired. Please try again." };
+  }
+  const expectedSig = crypto5.createHmac("sha256", JWT_SECRET2).update(`${nonce}:${provider}:${issuedAt}:${next}`).digest("hex");
+  if (!crypto5.timingSafeEqual(Buffer.from(sig, "hex"), Buffer.from(expectedSig, "hex"))) {
+    return { valid: false, next: "/dashboard", error: "Invalid OAuth state signature" };
+  }
+  return { valid: true, next: sanitizeNextPath(next) };
+}
+function buildOAuthAuthorizationUrl(provider, state, callbackUrl) {
+  if (provider === "google") {
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    if (!clientId) {
+      throw new Error("Google OAuth is not configured: GOOGLE_CLIENT_ID is missing.");
+    }
+    const params = new URLSearchParams({
+      client_id: clientId,
+      redirect_uri: callbackUrl,
+      response_type: "code",
+      scope: "openid email profile",
+      access_type: "offline",
+      prompt: "select_account",
+      state
+    });
+    return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+  }
+  if (provider === "github") {
+    const clientId = process.env.GITHUB_CLIENT_ID;
+    if (!clientId) {
+      throw new Error("GitHub OAuth is not configured: GITHUB_CLIENT_ID is missing.");
+    }
+    const params = new URLSearchParams({
+      client_id: clientId,
+      redirect_uri: callbackUrl,
+      scope: "read:user user:email",
+      state
+    });
+    return `https://github.com/login/oauth/authorize?${params.toString()}`;
+  }
+  throw new Error(`Unsupported OAuth provider: ${provider}`);
+}
+async function exchangeOAuthCode(provider, code, callbackUrl) {
+  if (provider === "google") {
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+    if (!clientId || !clientSecret) {
+      throw new Error("Google OAuth credentials missing.");
+    }
+    const tokenUrl = process.env.GOOGLE_TOKEN_URL || "https://oauth2.googleapis.com/token";
+    const params = new URLSearchParams({
+      code,
+      client_id: clientId,
+      client_secret: clientSecret,
+      redirect_uri: callbackUrl,
+      grant_type: "authorization_code"
+    });
+    const res = await fetch(tokenUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Accept": "application/json"
+      },
+      body: params.toString()
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.access_token) {
+      const errMsg = data.error_description || data.error || `HTTP ${res.status}`;
+      throw new Error(`Google token exchange failed: ${errMsg}`);
+    }
+    return {
+      accessToken: data.access_token,
+      idToken: data.id_token
+    };
+  }
+  if (provider === "github") {
+    const clientId = process.env.GITHUB_CLIENT_ID;
+    const clientSecret = process.env.GITHUB_CLIENT_SECRET;
+    if (!clientId || !clientSecret) {
+      throw new Error("GitHub OAuth credentials missing.");
+    }
+    const tokenUrl = process.env.GITHUB_TOKEN_URL || "https://github.com/login/oauth/access_token";
+    const res = await fetch(tokenUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+      },
+      body: JSON.stringify({
+        client_id: clientId,
+        client_secret: clientSecret,
+        code,
+        redirect_uri: callbackUrl
+      })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.access_token) {
+      const errMsg = data.error_description || data.error || `HTTP ${res.status}`;
+      throw new Error(`GitHub token exchange failed: ${errMsg}`);
+    }
+    return {
+      accessToken: data.access_token
+    };
+  }
+  throw new Error(`Unsupported provider: ${provider}`);
+}
+async function fetchOAuthUserProfile(provider, accessToken) {
+  if (provider === "google") {
+    const userinfoUrl = process.env.GOOGLE_USERINFO_URL || "https://www.googleapis.com/oauth2/v3/userinfo";
+    const res = await fetch(userinfoUrl, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: "application/json"
+      }
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.sub) {
+      throw new Error(`Failed to retrieve Google profile: ${data.error || res.status}`);
+    }
+    return {
+      provider: "google",
+      providerUserId: String(data.sub),
+      email: (data.email || "").trim().toLowerCase(),
+      emailVerified: Boolean(data.email_verified),
+      displayName: data.name || data.given_name || (data.email ? data.email.split("@")[0] : "Google User"),
+      avatarUrl: data.picture || ""
+    };
+  }
+  if (provider === "github") {
+    const userUrl = process.env.GITHUB_USER_URL || "https://api.github.com/user";
+    const res = await fetch(userUrl, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "User-Agent": "KYRON-Agent-Marketplace",
+        Accept: "application/vnd.github+json"
+      }
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.id) {
+      throw new Error(`Failed to retrieve GitHub profile: ${data.message || res.status}`);
+    }
+    let email = (data.email || "").trim().toLowerCase();
+    let emailVerified = Boolean(email);
+    if (!email) {
+      try {
+        const emailsUrl = process.env.GITHUB_EMAILS_URL || "https://api.github.com/user/emails";
+        const emailRes = await fetch(emailsUrl, {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "User-Agent": "KYRON-Agent-Marketplace",
+            Accept: "application/vnd.github+json"
+          }
+        });
+        if (emailRes.ok) {
+          const emails = await emailRes.json();
+          if (Array.isArray(emails) && emails.length > 0) {
+            const primaryVerified = emails.find((e) => e.primary && e.verified);
+            const anyVerified = emails.find((e) => e.verified);
+            const fallback = primaryVerified || anyVerified || emails[0];
+            if (fallback?.email) {
+              email = String(fallback.email).trim().toLowerCase();
+              emailVerified = Boolean(fallback.verified);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("Could not fetch secondary GitHub emails:", err.message);
+      }
+    }
+    if (!email) {
+      email = `gh_${data.id}@users.noreply.github.com`;
+      emailVerified = false;
+    }
+    return {
+      provider: "github",
+      providerUserId: String(data.id),
+      email,
+      emailVerified,
+      displayName: data.name || data.login || `gh_${data.id}`,
+      username: data.login ? String(data.login).toLowerCase() : void 0,
+      avatarUrl: data.avatar_url || ""
+    };
+  }
+  throw new Error(`Unsupported provider: ${provider}`);
+}
+async function syncOAuthAccount(profile) {
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const existingLink = await db.get(
+    `SELECT user_id FROM oauth_accounts WHERE provider = ? AND provider_user_id = ?`,
+    [profile.provider, profile.providerUserId]
+  );
+  if (existingLink?.user_id) {
+    const existingUser = await db.get(
+      `SELECT id, email, display_name, username, avatar_url, credit_balance, is_unlimited_credit_user, role FROM profiles WHERE id = ?`,
+      [existingLink.user_id]
+    );
+    if (existingUser) {
+      return {
+        id: existingUser.id,
+        email: existingUser.email,
+        username: existingUser.username,
+        display_name: existingUser.display_name,
+        avatar_url: existingUser.avatar_url,
+        credit_balance: Number(existingUser.credit_balance),
+        is_unlimited_credit_user: existingUser.is_unlimited_credit_user === 1,
+        role: existingUser.role || "user"
+      };
+    }
+  }
+  if (profile.email && !profile.email.includes("users.noreply.github.com")) {
+    const userByEmail = await db.get(
+      `SELECT id, email, display_name, username, avatar_url, credit_balance, is_unlimited_credit_user, role FROM profiles WHERE email = ?`,
+      [profile.email]
+    );
+    if (userByEmail) {
+      const linkId2 = "oacc_" + crypto5.randomUUID();
+      try {
+        await db.run(
+          `INSERT INTO oauth_accounts (id, user_id, provider, provider_user_id, email, created_at)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          [linkId2, userByEmail.id, profile.provider, profile.providerUserId, profile.email, now]
+        );
+      } catch (err) {
+        console.warn("OAuth link insertion note:", err.message);
+      }
+      if (!userByEmail.avatar_url && profile.avatarUrl) {
+        await db.run(`UPDATE profiles SET avatar_url = ?, updated_at = ? WHERE id = ?`, [profile.avatarUrl, now, userByEmail.id]);
+      }
+      return {
+        id: userByEmail.id,
+        email: userByEmail.email,
+        username: userByEmail.username,
+        display_name: userByEmail.display_name,
+        avatar_url: userByEmail.avatar_url || profile.avatarUrl,
+        credit_balance: Number(userByEmail.credit_balance),
+        is_unlimited_credit_user: userByEmail.is_unlimited_credit_user === 1,
+        role: userByEmail.role || "user"
+      };
+    }
+  }
+  const userId = "usr_" + crypto5.randomUUID();
+  let candidateUsername = (profile.username || profile.displayName || profile.email.split("@")[0]).toLowerCase().replace(/[^a-z0-9_]+/g, "_").slice(0, 20);
+  if (candidateUsername.length < 3) {
+    candidateUsername = `${candidateUsername}_${crypto5.randomBytes(2).toString("hex")}`;
+  }
+  let finalUsername = candidateUsername;
+  let attempts = 0;
+  while (attempts < 5) {
+    const taken = await db.get(`SELECT id FROM profiles WHERE username = ?`, [finalUsername]);
+    if (!taken) break;
+    finalUsername = `${candidateUsername.slice(0, 18)}_${crypto5.randomBytes(2).toString("hex")}`;
+    attempts++;
+  }
+  const welcomeCredit = 10;
+  const isPostgres = Boolean(db.isPostgres);
+  if (isPostgres) {
+    await db.run(
+      `INSERT INTO profiles (
+        id, email, display_name, full_name, username, avatar_url,
+        credit_balance, is_unlimited_credit_user, role, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 'user', ?, ?)
+      ON CONFLICT (id) DO UPDATE SET updated_at = EXCLUDED.updated_at`,
+      [
+        userId,
+        profile.email,
+        profile.displayName,
+        profile.displayName,
+        finalUsername,
+        profile.avatarUrl || "",
+        welcomeCredit,
+        now,
+        now
+      ]
+    );
+  } else {
+    await db.run(
+      `INSERT INTO profiles (
+        id, email, display_name, full_name, username, avatar_url,
+        credit_balance, is_unlimited_credit_user, role, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 'user', ?, ?)`,
+      [
+        userId,
+        profile.email,
+        profile.displayName,
+        profile.displayName,
+        finalUsername,
+        profile.avatarUrl || "",
+        welcomeCredit,
+        now,
+        now
+      ]
+    );
+  }
+  const linkId = "oacc_" + crypto5.randomUUID();
+  await db.run(
+    `INSERT INTO oauth_accounts (id, user_id, provider, provider_user_id, email, created_at)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [linkId, userId, profile.provider, profile.providerUserId, profile.email, now]
+  );
+  return {
+    id: userId,
+    email: profile.email,
+    username: finalUsername,
+    display_name: profile.displayName,
+    avatarUrl: profile.avatarUrl,
+    credit_balance: welcomeCredit,
+    is_unlimited_credit_user: false,
+    role: "user"
+  };
+}
+async function processOAuthCallback(provider, code, callbackUrl) {
+  const tokens = await exchangeOAuthCode(provider, code, callbackUrl);
+  const profile = await fetchOAuthUserProfile(provider, tokens.accessToken);
+  const user = await syncOAuthAccount(profile);
+  const token = generateToken({
+    id: user.id,
+    email: user.email,
+    username: user.username,
+    is_unlimited_credit_user: user.is_unlimited_credit_user
+  });
+  return { user, token };
+}
+
+// server/routes/auth.ts
 var router5 = Router5();
 function legacyAuthEnabled() {
   return process.env.TEST_MODE === "true" || process.env.NODE_ENV === "test" || process.env.ALLOW_LEGACY_AUTH === "true";
@@ -2844,6 +3746,7 @@ function rejectLegacyAuth(res) {
   return true;
 }
 var USERNAME_RE = /^[a-z0-9_]{3,24}$/;
+var EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 function isAllowedAvatarUrl(value) {
   try {
     const url = new URL(value);
@@ -2886,8 +3789,8 @@ router5.post("/register", async (req, res) => {
       res.status(409).json({ error: "An account with this email already exists." });
       return;
     }
-    const userId = "usr_" + crypto4.randomUUID();
-    const username = display_name.toLowerCase().replace(/[^a-z0-9]+/g, "_").slice(0, 30) + "_" + crypto4.randomBytes(2).toString("hex");
+    const userId = "usr_" + crypto6.randomUUID();
+    const username = display_name.toLowerCase().replace(/[^a-z0-9]+/g, "_").slice(0, 30) + "_" + crypto6.randomBytes(2).toString("hex");
     const passwordHash = bcrypt.hashSync(password, 8);
     const now = (/* @__PURE__ */ new Date()).toISOString();
     await db.run(`
@@ -2952,27 +3855,214 @@ router5.post("/login", async (req, res) => {
     res.status(500).json({ error: "An unexpected error occurred during login." });
   }
 });
+function formatUserProfile(profile, connectedAccounts = []) {
+  let social_links = {};
+  try {
+    if (profile.social_links) {
+      social_links = typeof profile.social_links === "string" ? JSON.parse(profile.social_links) : profile.social_links;
+    }
+  } catch {
+  }
+  let creator_skills = [];
+  try {
+    if (profile.creator_skills) {
+      creator_skills = typeof profile.creator_skills === "string" ? JSON.parse(profile.creator_skills) : profile.creator_skills;
+    }
+  } catch {
+  }
+  let creator_categories = [];
+  try {
+    if (profile.creator_categories) {
+      creator_categories = typeof profile.creator_categories === "string" ? JSON.parse(profile.creator_categories) : profile.creator_categories;
+    }
+  } catch {
+  }
+  let creator_portfolio = [];
+  try {
+    if (profile.creator_portfolio) {
+      creator_portfolio = typeof profile.creator_portfolio === "string" ? JSON.parse(profile.creator_portfolio) : profile.creator_portfolio;
+    }
+  } catch {
+  }
+  let creator_links = {};
+  try {
+    if (profile.creator_links) {
+      creator_links = typeof profile.creator_links === "string" ? JSON.parse(profile.creator_links) : profile.creator_links;
+    }
+  } catch {
+  }
+  let skills_expertise = [];
+  try {
+    if (profile.skills_expertise) {
+      skills_expertise = typeof profile.skills_expertise === "string" ? JSON.parse(profile.skills_expertise) : profile.skills_expertise;
+    }
+  } catch {
+  }
+  let portfolio_items = [];
+  try {
+    if (profile.portfolio_items) {
+      portfolio_items = typeof profile.portfolio_items === "string" ? JSON.parse(profile.portfolio_items) : profile.portfolio_items;
+    }
+  } catch {
+  }
+  let services_offered = [];
+  try {
+    if (profile.services_offered) {
+      services_offered = typeof profile.services_offered === "string" ? JSON.parse(profile.services_offered) : profile.services_offered;
+    }
+  } catch {
+  }
+  let agency_permissions = [];
+  try {
+    if (profile.agency_permissions) {
+      agency_permissions = typeof profile.agency_permissions === "string" ? JSON.parse(profile.agency_permissions) : profile.agency_permissions;
+    }
+  } catch {
+  }
+  let hiring_preferences = {};
+  try {
+    if (profile.hiring_preferences) {
+      hiring_preferences = typeof profile.hiring_preferences === "string" ? JSON.parse(profile.hiring_preferences) : profile.hiring_preferences;
+    }
+  } catch {
+  }
+  let notification_preferences = {
+    email_security: true,
+    email_product: true,
+    email_marketing: false,
+    in_app: true,
+    new_ratings: true,
+    skill_sales: true
+  };
+  try {
+    if (profile.notification_preferences) {
+      const parsed = typeof profile.notification_preferences === "string" ? JSON.parse(profile.notification_preferences) : profile.notification_preferences;
+      notification_preferences = { ...notification_preferences, ...parsed };
+    }
+  } catch {
+  }
+  const fullName = profile.full_name || profile.display_name || "";
+  const firstName = profile.first_name || (fullName.split(" ")[0] || "");
+  const lastName = profile.last_name || (fullName.split(" ").slice(1).join(" ") || "");
+  return {
+    id: profile.id,
+    email: profile.email,
+    display_name: profile.display_name || fullName,
+    full_name: fullName,
+    first_name: firstName,
+    last_name: lastName,
+    username: profile.username,
+    bio: profile.bio || "",
+    avatar_url: profile.avatar_url || null,
+    cover_image_url: profile.cover_image_url || null,
+    location: profile.location || "",
+    phone: profile.phone || "",
+    website_url: profile.website_url || "",
+    social_links,
+    role: profile.role || "user",
+    credit_balance: Number(profile.credit_balance || 0),
+    is_unlimited_credit_user: profile.is_unlimited_credit_user === 1,
+    created_at: profile.created_at,
+    updated_at: profile.updated_at,
+    // Creator Profile
+    creator_mode_enabled: profile.creator_mode_enabled === 1,
+    creator_display_name: profile.creator_display_name || profile.display_name || fullName,
+    creator_avatar_url: profile.creator_avatar_url || profile.avatar_url,
+    creator_cover_image_url: profile.creator_cover_image_url || profile.cover_image_url,
+    creator_headline: profile.creator_headline || "",
+    creator_bio: profile.creator_bio || profile.bio || "",
+    creator_skills,
+    creator_categories,
+    creator_portfolio,
+    creator_links,
+    creator_verified: profile.creator_verified === 1,
+    creator_storefront_slug: profile.creator_storefront_slug || profile.username,
+    // Role-based profile info
+    role_type: profile.role_type || "individual",
+    professional_title: profile.professional_title || "",
+    skills_expertise,
+    years_experience: Number(profile.years_experience || 0),
+    portfolio_items,
+    services_offered,
+    agency_name: profile.agency_name || "",
+    agency_logo_url: profile.agency_logo_url || null,
+    agency_description: profile.agency_description || "",
+    agency_website: profile.agency_website || "",
+    agency_team_size: profile.agency_team_size || "",
+    agency_designation: profile.agency_designation || "",
+    agency_permissions,
+    company_name: profile.company_name || "",
+    company_industry: profile.company_industry || "",
+    company_size: profile.company_size || "",
+    hiring_preferences,
+    // Preferences & Privacy
+    theme_preference: profile.theme_preference || "system",
+    language: profile.language || "en",
+    timezone: profile.timezone || "UTC",
+    notification_preferences,
+    profile_visibility: profile.profile_visibility || "public",
+    discoverability: profile.discoverability !== 0,
+    messaging_preference: profile.messaging_preference || "anyone",
+    is_deactivated: profile.is_deactivated === 1,
+    deactivated_at: profile.deactivated_at || null,
+    // Connected Accounts
+    connected_accounts: connectedAccounts.map((a) => ({
+      id: a.id,
+      provider: a.provider,
+      provider_user_id: a.provider_user_id,
+      email: a.email,
+      created_at: a.created_at
+    })),
+    email_verified: true
+  };
+}
 router5.get("/me", requireAuth, async (req, res) => {
   try {
     const userId = req.user.id;
     const profile = await db.get(
-      `SELECT id, email, display_name, full_name, username, bio, avatar_url, role, credit_balance, is_unlimited_credit_user, created_at, updated_at FROM profiles WHERE id = ?`,
+      `SELECT * FROM profiles WHERE id = ?`,
       [userId]
     );
     if (!profile) {
       res.status(404).json({ error: "User not found" });
       return;
     }
+    const connected = await db.all(
+      `SELECT id, provider, provider_user_id, email, created_at FROM oauth_accounts WHERE user_id = ?`,
+      [userId]
+    );
     res.json({
-      user: {
-        ...profile,
-        credit_balance: Number(profile.credit_balance),
-        is_unlimited_credit_user: profile.is_unlimited_credit_user === 1
-      }
+      user: formatUserProfile(profile, connected)
     });
   } catch (err) {
     console.error("Profile fetch error:", err.message);
     res.status(500).json({ error: "An unexpected error occurred while fetching user profile." });
+  }
+});
+router5.get("/check-username", async (req, res) => {
+  try {
+    const rawUsername = (req.query.username || "").trim().toLowerCase();
+    const currentUserId = req.query.current_user_id;
+    if (!rawUsername) {
+      res.status(400).json({ available: false, reason: "Username cannot be empty." });
+      return;
+    }
+    if (!USERNAME_RE.test(rawUsername)) {
+      res.status(200).json({ available: false, reason: "Username must be 3\u201324 lowercase letters, numbers, or underscores." });
+      return;
+    }
+    const existing = await db.get(
+      `SELECT id FROM profiles WHERE username = ? ${currentUserId ? "AND id != ?" : ""}`,
+      currentUserId ? [rawUsername, currentUserId] : [rawUsername]
+    );
+    if (existing) {
+      res.json({ available: false, reason: "Username is already taken." });
+    } else {
+      res.json({ available: true });
+    }
+  } catch (err) {
+    console.error("Check username error:", err.message);
+    res.status(500).json({ error: "Failed to verify username availability." });
   }
 });
 router5.put("/me", requireAuth, async (req, res) => {
@@ -2983,13 +4073,33 @@ router5.put("/me", requireAuth, async (req, res) => {
       res.status(400).json({ error: invalid });
       return;
     }
-    const { display_name, full_name, bio, avatar_url, username } = req.body;
-    const existing = await db.get(`SELECT id FROM profiles WHERE id = ?`, [userId]);
+    const {
+      display_name,
+      full_name,
+      first_name,
+      last_name,
+      bio,
+      avatar_url,
+      cover_image_url,
+      location,
+      phone,
+      website_url,
+      social_links,
+      username,
+      theme_preference,
+      language,
+      timezone,
+      notification_preferences,
+      profile_visibility,
+      discoverability,
+      messaging_preference
+    } = req.body;
+    const existing = await db.get(`SELECT id, username FROM profiles WHERE id = ?`, [userId]);
     if (!existing) {
       res.status(404).json({ error: "Profile not found" });
       return;
     }
-    if (username) {
+    if (username && username !== existing.username) {
       const existingUsername = await db.get(
         `SELECT id FROM profiles WHERE username = ? AND id != ?`,
         [username, userId]
@@ -3002,27 +4112,59 @@ router5.put("/me", requireAuth, async (req, res) => {
     const rawName = full_name || display_name;
     const updatedName = typeof rawName === "string" ? rawName.trim() : rawName;
     const now = (/* @__PURE__ */ new Date()).toISOString();
+    const socialLinksStr = social_links !== void 0 ? typeof social_links === "string" ? social_links : JSON.stringify(social_links) : null;
+    const notifStr = notification_preferences !== void 0 ? typeof notification_preferences === "string" ? notification_preferences : JSON.stringify(notification_preferences) : null;
     await db.run(
       `UPDATE profiles
        SET display_name = COALESCE(?, display_name),
            full_name = COALESCE(?, full_name),
+           first_name = COALESCE(?, first_name),
+           last_name = COALESCE(?, last_name),
            bio = COALESCE(?, bio),
            avatar_url = COALESCE(?, avatar_url),
+           cover_image_url = COALESCE(?, cover_image_url),
+           location = COALESCE(?, location),
+           phone = COALESCE(?, phone),
+           website_url = COALESCE(?, website_url),
+           social_links = COALESCE(?, social_links),
            username = COALESCE(?, username),
+           theme_preference = COALESCE(?, theme_preference),
+           language = COALESCE(?, language),
+           timezone = COALESCE(?, timezone),
+           notification_preferences = COALESCE(?, notification_preferences),
+           profile_visibility = COALESCE(?, profile_visibility),
+           discoverability = COALESCE(?, discoverability),
+           messaging_preference = COALESCE(?, messaging_preference),
            updated_at = ?
        WHERE id = ?`,
-      [updatedName, updatedName, bio, avatar_url, username, now, userId]
+      [
+        updatedName,
+        updatedName,
+        first_name || null,
+        last_name || null,
+        bio !== void 0 ? bio : null,
+        avatar_url !== void 0 ? avatar_url : null,
+        cover_image_url !== void 0 ? cover_image_url : null,
+        location !== void 0 ? location : null,
+        phone !== void 0 ? phone : null,
+        website_url !== void 0 ? website_url : null,
+        socialLinksStr,
+        username || null,
+        theme_preference || null,
+        language || null,
+        timezone || null,
+        notifStr,
+        profile_visibility || null,
+        discoverability !== void 0 ? discoverability ? 1 : 0 : null,
+        messaging_preference || null,
+        now,
+        userId
+      ]
     );
-    const updated = await db.get(
-      `SELECT id, email, display_name, full_name, username, bio, avatar_url, role, credit_balance, is_unlimited_credit_user, created_at, updated_at FROM profiles WHERE id = ?`,
-      [userId]
-    );
+    const updated = await db.get(`SELECT * FROM profiles WHERE id = ?`, [userId]);
+    const connected = await db.all(`SELECT id, provider, provider_user_id, email, created_at FROM oauth_accounts WHERE user_id = ?`, [userId]);
     res.json({
-      user: {
-        ...updated,
-        credit_balance: Number(updated.credit_balance),
-        is_unlimited_credit_user: updated.is_unlimited_credit_user === 1
-      }
+      user: formatUserProfile(updated, connected)
     });
   } catch (err) {
     if (err?.code === "23505" || /UNIQUE constraint failed: profiles\.username/i.test(err?.message || "")) {
@@ -3033,14 +4175,727 @@ router5.put("/me", requireAuth, async (req, res) => {
     res.status(500).json({ error: "An unexpected error occurred while updating profile." });
   }
 });
+router5.put("/creator-profile", requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const {
+      creator_mode_enabled,
+      creator_display_name,
+      creator_avatar_url,
+      creator_cover_image_url,
+      creator_headline,
+      creator_bio,
+      creator_skills,
+      creator_categories,
+      creator_portfolio,
+      creator_links,
+      creator_storefront_slug
+    } = req.body;
+    const skillsStr = creator_skills !== void 0 ? typeof creator_skills === "string" ? creator_skills : JSON.stringify(creator_skills) : null;
+    const categoriesStr = creator_categories !== void 0 ? typeof creator_categories === "string" ? creator_categories : JSON.stringify(creator_categories) : null;
+    const portfolioStr = creator_portfolio !== void 0 ? typeof creator_portfolio === "string" ? creator_portfolio : JSON.stringify(creator_portfolio) : null;
+    const linksStr = creator_links !== void 0 ? typeof creator_links === "string" ? creator_links : JSON.stringify(creator_links) : null;
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    await db.run(
+      `UPDATE profiles
+       SET creator_mode_enabled = COALESCE(?, creator_mode_enabled),
+           creator_display_name = COALESCE(?, creator_display_name),
+           creator_avatar_url = COALESCE(?, creator_avatar_url),
+           creator_cover_image_url = COALESCE(?, creator_cover_image_url),
+           creator_headline = COALESCE(?, creator_headline),
+           creator_bio = COALESCE(?, creator_bio),
+           creator_skills = COALESCE(?, creator_skills),
+           creator_categories = COALESCE(?, creator_categories),
+           creator_portfolio = COALESCE(?, creator_portfolio),
+           creator_links = COALESCE(?, creator_links),
+           creator_storefront_slug = COALESCE(?, creator_storefront_slug),
+           updated_at = ?
+       WHERE id = ?`,
+      [
+        creator_mode_enabled !== void 0 ? creator_mode_enabled ? 1 : 0 : null,
+        creator_display_name || null,
+        creator_avatar_url || null,
+        creator_cover_image_url || null,
+        creator_headline || null,
+        creator_bio || null,
+        skillsStr,
+        categoriesStr,
+        portfolioStr,
+        linksStr,
+        creator_storefront_slug || null,
+        now,
+        userId
+      ]
+    );
+    const updated = await db.get(`SELECT * FROM profiles WHERE id = ?`, [userId]);
+    const connected = await db.all(`SELECT id, provider, provider_user_id, email, created_at FROM oauth_accounts WHERE user_id = ?`, [userId]);
+    res.json({
+      success: true,
+      user: formatUserProfile(updated, connected)
+    });
+  } catch (err) {
+    console.error("Creator profile update error:", err.message);
+    res.status(500).json({ error: "Failed to update creator profile." });
+  }
+});
+router5.put("/role-profile", requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const {
+      role_type,
+      professional_title,
+      skills_expertise,
+      years_experience,
+      portfolio_items,
+      services_offered,
+      agency_name,
+      agency_logo_url,
+      agency_description,
+      agency_website,
+      agency_team_size,
+      agency_designation,
+      agency_permissions,
+      company_name,
+      company_industry,
+      company_size,
+      hiring_preferences
+    } = req.body;
+    const skillsStr = skills_expertise !== void 0 ? typeof skills_expertise === "string" ? skills_expertise : JSON.stringify(skills_expertise) : null;
+    const portfolioStr = portfolio_items !== void 0 ? typeof portfolio_items === "string" ? portfolio_items : JSON.stringify(portfolio_items) : null;
+    const servicesStr = services_offered !== void 0 ? typeof services_offered === "string" ? services_offered : JSON.stringify(services_offered) : null;
+    const permissionsStr = agency_permissions !== void 0 ? typeof agency_permissions === "string" ? agency_permissions : JSON.stringify(agency_permissions) : null;
+    const hiringStr = hiring_preferences !== void 0 ? typeof hiring_preferences === "string" ? hiring_preferences : JSON.stringify(hiring_preferences) : null;
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    await db.run(
+      `UPDATE profiles
+       SET role_type = COALESCE(?, role_type),
+           professional_title = COALESCE(?, professional_title),
+           skills_expertise = COALESCE(?, skills_expertise),
+           years_experience = COALESCE(?, years_experience),
+           portfolio_items = COALESCE(?, portfolio_items),
+           services_offered = COALESCE(?, services_offered),
+           agency_name = COALESCE(?, agency_name),
+           agency_logo_url = COALESCE(?, agency_logo_url),
+           agency_description = COALESCE(?, agency_description),
+           agency_website = COALESCE(?, agency_website),
+           agency_team_size = COALESCE(?, agency_team_size),
+           agency_designation = COALESCE(?, agency_designation),
+           agency_permissions = COALESCE(?, agency_permissions),
+           company_name = COALESCE(?, company_name),
+           company_industry = COALESCE(?, company_industry),
+           company_size = COALESCE(?, company_size),
+           hiring_preferences = COALESCE(?, hiring_preferences),
+           updated_at = ?
+       WHERE id = ?`,
+      [
+        role_type || null,
+        professional_title || null,
+        skillsStr,
+        years_experience !== void 0 ? Number(years_experience) : null,
+        portfolioStr,
+        servicesStr,
+        agency_name || null,
+        agency_logo_url || null,
+        agency_description || null,
+        agency_website || null,
+        agency_team_size || null,
+        agency_designation || null,
+        permissionsStr,
+        company_name || null,
+        company_industry || null,
+        company_size || null,
+        hiringStr,
+        now,
+        userId
+      ]
+    );
+    const updated = await db.get(`SELECT * FROM profiles WHERE id = ?`, [userId]);
+    const connected = await db.all(`SELECT id, provider, provider_user_id, email, created_at FROM oauth_accounts WHERE user_id = ?`, [userId]);
+    res.json({
+      success: true,
+      user: formatUserProfile(updated, connected)
+    });
+  } catch (err) {
+    console.error("Role profile update error:", err.message);
+    res.status(500).json({ error: "Failed to update role profile." });
+  }
+});
+router5.post("/change-email", requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { new_email } = req.body;
+    if (!new_email || !EMAIL_RE.test(new_email.trim())) {
+      res.status(400).json({ error: "Please enter a valid email address." });
+      return;
+    }
+    const cleanEmail = new_email.trim().toLowerCase();
+    const existing = await db.get(`SELECT id FROM profiles WHERE email = ? AND id != ?`, [cleanEmail, userId]);
+    if (existing) {
+      res.status(409).json({ error: "An account with this email address already exists." });
+      return;
+    }
+    await db.run(`UPDATE profiles SET email = ?, updated_at = ? WHERE id = ?`, [cleanEmail, (/* @__PURE__ */ new Date()).toISOString(), userId]);
+    res.json({
+      success: true,
+      email: cleanEmail,
+      message: "Your email address has been successfully updated."
+    });
+  } catch (err) {
+    console.error("Change email error:", err.message);
+    res.status(500).json({ error: "Failed to update email address." });
+  }
+});
+router5.put("/phone", requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { phone } = req.body;
+    await db.run(`UPDATE profiles SET phone = ?, updated_at = ? WHERE id = ?`, [phone || "", (/* @__PURE__ */ new Date()).toISOString(), userId]);
+    res.json({ success: true, phone: phone || "" });
+  } catch (err) {
+    console.error("Update phone error:", err.message);
+    res.status(500).json({ error: "Failed to update phone number." });
+  }
+});
+router5.get("/connected-accounts", requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const accounts = await db.all(
+      `SELECT id, provider, provider_user_id, email, created_at FROM oauth_accounts WHERE user_id = ?`,
+      [userId]
+    );
+    res.json({ accounts });
+  } catch (err) {
+    console.error("Get connected accounts error:", err.message);
+    res.status(500).json({ error: "Failed to retrieve connected accounts." });
+  }
+});
+router5.delete("/connected-accounts/:provider", requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const provider = req.params.provider?.toLowerCase();
+    const profile = await db.get(`SELECT password_hash FROM profiles WHERE id = ?`, [userId]);
+    const otherProviders = await db.all(
+      `SELECT id FROM oauth_accounts WHERE user_id = ? AND provider != ?`,
+      [userId, provider]
+    );
+    if (!profile?.password_hash && otherProviders.length === 0) {
+      res.status(400).json({ error: "Cannot disconnect your only sign-in method. Please set a password or connect another provider first." });
+      return;
+    }
+    await db.run(`DELETE FROM oauth_accounts WHERE user_id = ? AND provider = ?`, [userId, provider]);
+    res.json({ success: true, message: `Successfully disconnected ${provider}.` });
+  } catch (err) {
+    console.error("Disconnect account error:", err.message);
+    res.status(500).json({ error: "Failed to disconnect account." });
+  }
+});
+router5.get("/security/activity", requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    let activities = await db.all(
+      `SELECT * FROM login_activity WHERE user_id = ? ORDER BY logged_in_at DESC LIMIT 10`,
+      [userId]
+    );
+    let sessions = await db.all(
+      `SELECT * FROM active_sessions WHERE user_id = ? ORDER BY last_active DESC`,
+      [userId]
+    );
+    if (sessions.length === 0) {
+      const sessionId = "ses_" + crypto6.randomUUID();
+      const now = (/* @__PURE__ */ new Date()).toISOString();
+      const ip = req.headers["x-forwarded-for"]?.toString().split(",")[0].trim() || req.socket.remoteAddress || "127.0.0.1";
+      const userAgent = req.headers["user-agent"] || "Chrome / macOS";
+      const deviceName = /Mac/i.test(userAgent) ? "MacBook Pro / macOS" : /Windows/i.test(userAgent) ? "Windows PC" : /iPhone|Android/i.test(userAgent) ? "Mobile Device" : "Desktop Browser";
+      await db.run(`
+        INSERT INTO active_sessions (id, user_id, device_name, ip_address, last_active, is_current)
+        VALUES (?, ?, ?, ?, ?, 1)
+      `, [sessionId, userId, deviceName, ip, now]);
+      await db.run(`
+        INSERT INTO login_activity (id, user_id, ip_address, user_agent, device_type, location, logged_in_at)
+        VALUES (?, ?, ?, ?, ?, 'Local Workspace (Verified)', ?)
+      `, ["act_" + crypto6.randomUUID(), userId, ip, userAgent, deviceName, now]);
+      activities = await db.all(`SELECT * FROM login_activity WHERE user_id = ? ORDER BY logged_in_at DESC LIMIT 10`, [userId]);
+      sessions = await db.all(`SELECT * FROM active_sessions WHERE user_id = ? ORDER BY last_active DESC`, [userId]);
+    }
+    res.json({
+      activity: activities,
+      sessions: sessions.map((s) => ({ ...s, is_current: s.is_current === 1 }))
+    });
+  } catch (err) {
+    console.error("Security activity error:", err.message);
+    res.status(500).json({ error: "Failed to retrieve security activity." });
+  }
+});
+router5.post("/security/logout-all", requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    await db.run(`DELETE FROM active_sessions WHERE user_id = ? AND is_current = 0`, [userId]);
+    res.json({ success: true, message: "Successfully signed out of all other active sessions." });
+  } catch (err) {
+    console.error("Logout all error:", err.message);
+    res.status(500).json({ error: "Failed to sign out of other sessions." });
+  }
+});
+router5.post("/export-data", requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const profile = await db.get(`SELECT * FROM profiles WHERE id = ?`, [userId]);
+    if (!profile) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+    const purchases = await db.all(`SELECT * FROM user_purchases WHERE user_id = ?`, [userId]);
+    const skills = await db.all(`SELECT * FROM skills WHERE creator_id = ?`, [userId]);
+    const reviews = await db.all(`SELECT * FROM skill_reviews WHERE user_id = ?`, [userId]);
+    const votes = await db.all(`SELECT * FROM skill_votes WHERE user_id = ?`, [userId]);
+    const connectedAccounts = await db.all(`SELECT provider, email, created_at FROM oauth_accounts WHERE user_id = ?`, [userId]);
+    const activity = await db.all(`SELECT * FROM login_activity WHERE user_id = ?`, [userId]);
+    const exportPayload = {
+      exported_at: (/* @__PURE__ */ new Date()).toISOString(),
+      account: {
+        id: profile.id,
+        email: profile.email,
+        display_name: profile.display_name,
+        username: profile.username,
+        created_at: profile.created_at
+      },
+      profile: formatUserProfile(profile, connectedAccounts),
+      creator_catalog: skills,
+      purchased_skills: purchases,
+      reviews,
+      community_votes: votes,
+      login_history: activity
+    };
+    res.json(exportPayload);
+  } catch (err) {
+    console.error("Export data error:", err.message);
+    res.status(500).json({ error: "Failed to generate personal data export." });
+  }
+});
+router5.post("/deactivate", requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    await db.run(`UPDATE profiles SET is_deactivated = 1, deactivated_at = ? WHERE id = ?`, [now, userId]);
+    res.json({ success: true, message: "Your account has been deactivated." });
+  } catch (err) {
+    console.error("Deactivate account error:", err.message);
+    res.status(500).json({ error: "Failed to deactivate account." });
+  }
+});
+router5.delete("/account", requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    await db.run(`DELETE FROM active_sessions WHERE user_id = ?`, [userId]);
+    await db.run(`DELETE FROM login_activity WHERE user_id = ?`, [userId]);
+    await db.run(`DELETE FROM oauth_accounts WHERE user_id = ?`, [userId]);
+    await db.run(`DELETE FROM saved_skills WHERE user_id = ?`, [userId]);
+    await db.run(`DELETE FROM skill_votes WHERE user_id = ?`, [userId]);
+    await db.run(`DELETE FROM skill_reviews WHERE user_id = ?`, [userId]);
+    await db.run(`DELETE FROM user_purchases WHERE user_id = ?`, [userId]);
+    await db.run(`DELETE FROM profiles WHERE id = ?`, [userId]);
+    res.json({ success: true, message: "Account permanently deleted." });
+  } catch (err) {
+    console.error("Delete account error:", err.message);
+    res.status(500).json({ error: "Failed to delete account." });
+  }
+});
+router5.get("/oauth/providers", (_req, res) => {
+  res.json(getOAuthStatus());
+});
+router5.get("/oauth/:provider", (req, res) => {
+  const provider = req.params.provider?.toLowerCase();
+  if (provider !== "google" && provider !== "github") {
+    res.status(400).json({ error: `Unsupported OAuth provider: ${provider}` });
+    return;
+  }
+  const status = getOAuthStatus();
+  const next = req.query.next || "/dashboard";
+  if (!status[provider]) {
+    const isJson = req.query.format === "json" || req.headers.accept?.includes("application/json");
+    const msg = `${provider === "google" ? "Google" : "GitHub"} OAuth is not configured. Missing client ID or secret in environment.`;
+    if (isJson) {
+      res.status(503).json({ error: msg, provider });
+      return;
+    }
+    res.redirect(`/auth/callback?flow=oauth&error=provider_not_configured&error_description=${encodeURIComponent(msg)}&next=${encodeURIComponent(next)}`);
+    return;
+  }
+  try {
+    const state = createOAuthState(provider, next);
+    const callbackUrl = getOAuthCallbackUrl(provider, req);
+    const authUrl = buildOAuthAuthorizationUrl(provider, state, callbackUrl);
+    if (req.query.format === "json") {
+      res.json({ url: authUrl, state, provider });
+      return;
+    }
+    res.redirect(authUrl);
+  } catch (err) {
+    console.error(`OAuth initiation error for ${provider}:`, err.message);
+    res.status(500).json({ error: `Failed to initiate ${provider} OAuth: ${err.message}` });
+  }
+});
+router5.get("/oauth/:provider/callback", async (req, res) => {
+  const provider = req.params.provider?.toLowerCase();
+  if (provider !== "google" && provider !== "github") {
+    res.status(400).json({ error: `Unsupported OAuth provider: ${provider}` });
+    return;
+  }
+  const rawState = req.query.state;
+  if (req.query.error) {
+    const { next = "/dashboard" } = verifyOAuthState(rawState, provider);
+    const errCode = String(req.query.error);
+    const errDesc = String(req.query.error_description || "Sign-in was cancelled or denied");
+    res.redirect(
+      `/auth/callback?flow=oauth&error=${encodeURIComponent(errCode)}&error_description=${encodeURIComponent(errDesc)}&next=${encodeURIComponent(next)}`
+    );
+    return;
+  }
+  const stateCheck = verifyOAuthState(rawState, provider);
+  if (!stateCheck.valid) {
+    res.redirect(
+      `/auth/callback?flow=oauth&error=invalid_state&error_description=${encodeURIComponent(stateCheck.error || "Invalid or expired OAuth state")}&next=${encodeURIComponent(stateCheck.next)}`
+    );
+    return;
+  }
+  const code = req.query.code;
+  if (!code) {
+    res.redirect(
+      `/auth/callback?flow=oauth&error=missing_code&error_description=${encodeURIComponent("No authorization code was returned")}&next=${encodeURIComponent(stateCheck.next)}`
+    );
+    return;
+  }
+  try {
+    const callbackUrl = getOAuthCallbackUrl(provider, req);
+    const { token } = await processOAuthCallback(provider, code, callbackUrl);
+    res.redirect(
+      `/auth/callback?flow=oauth&token=${encodeURIComponent(token)}&next=${encodeURIComponent(stateCheck.next)}`
+    );
+  } catch (err) {
+    console.error(`OAuth callback processing error for ${provider}:`, err.message);
+    res.redirect(
+      `/auth/callback?flow=oauth&error=auth_failed&error_description=${encodeURIComponent(err.message || "OAuth authentication failed")}&next=${encodeURIComponent(stateCheck.next)}`
+    );
+  }
+});
+router5.post("/oauth/:provider/callback", async (req, res) => {
+  const provider = req.params.provider?.toLowerCase();
+  if (provider !== "google" && provider !== "github") {
+    res.status(400).json({ error: `Unsupported OAuth provider: ${provider}` });
+    return;
+  }
+  const { code, state, redirect_uri } = req.body || {};
+  if (!code) {
+    res.status(400).json({ error: "Authorization code is required" });
+    return;
+  }
+  if (state) {
+    const stateCheck = verifyOAuthState(state, provider);
+    if (!stateCheck.valid) {
+      res.status(400).json({ error: stateCheck.error || "Invalid or expired OAuth state" });
+      return;
+    }
+  }
+  try {
+    const callbackUrl = redirect_uri || getOAuthCallbackUrl(provider, req);
+    const { user, token } = await processOAuthCallback(provider, code, callbackUrl);
+    res.json({ user, token });
+  } catch (err) {
+    console.error(`OAuth POST callback error for ${provider}:`, err.message);
+    res.status(400).json({ error: err.message || "OAuth authentication failed" });
+  }
+});
+function getClientIp(req) {
+  const forwarded = req.headers["x-forwarded-for"];
+  if (typeof forwarded === "string") {
+    return forwarded.split(",")[0].trim();
+  }
+  if (Array.isArray(forwarded) && forwarded.length > 0) {
+    return forwarded[0].trim();
+  }
+  return req.socket.remoteAddress || req.ip || "127.0.0.1";
+}
+function getAppRedirectUrl(req, targetPath) {
+  const origin = req.headers.origin || (req.headers.host ? `${req.protocol || "http"}://${req.headers.host}` : null) || process.env.APP_URL || "http://localhost:3000";
+  const cleanPath = targetPath.startsWith("/") ? targetPath : "/" + targetPath;
+  return `${origin}${cleanPath}`;
+}
+router5.get("/rate-limit-status", async (req, res) => {
+  try {
+    const email = req.query.email;
+    const action = req.query.action;
+    if (!email || !action) {
+      res.status(400).json({ error: "email and action parameters are required." });
+      return;
+    }
+    if (!VALID_AUTH_EMAIL_ACTIONS.includes(action)) {
+      res.status(400).json({ error: `Invalid action. Must be one of: ${VALID_AUTH_EMAIL_ACTIONS.join(", ")}` });
+      return;
+    }
+    const cleanEmail = normalizeEmail(email);
+    const status = await checkEmailRateLimit(cleanEmail, action);
+    res.json({
+      action,
+      allowed: status.allowed,
+      remaining: status.remaining,
+      limit: status.limit,
+      total_attempts: status.totalAttemptsInWindow,
+      total_attempts_in_window: status.totalAttemptsInWindow,
+      next_eligible_at: status.nextEligibleAt ? status.nextEligibleAt.toISOString() : null,
+      retry_after_seconds: status.retryAfterSeconds
+    });
+  } catch (err) {
+    console.error("Rate limit status check error:", err.message);
+    res.status(500).json({ error: "Failed to retrieve rate limit status." });
+  }
+});
+router5.post("/pre-signup-check", async (req, res) => {
+  try {
+    const { email } = req.body || {};
+    if (!email || !EMAIL_RE.test(email.trim())) {
+      res.status(400).json({ error: "Please enter a valid email address." });
+      return;
+    }
+    const cleanEmail = normalizeEmail(email);
+    const clientIp = getClientIp(req);
+    const limitResult = await consumeEmailRateLimit(cleanEmail, "signup_verification", clientIp);
+    if (!limitResult.allowed) {
+      res.status(429).json({
+        error: limitResult.reason || RATE_LIMIT_EXCEEDED_MESSAGE,
+        code: "email_rate_limit_exceeded",
+        action: "signup_verification",
+        limit: 3,
+        next_eligible_at: limitResult.nextEligibleAt?.toISOString(),
+        retry_after_seconds: limitResult.retryAfterSeconds
+      });
+      return;
+    }
+    res.json({
+      allowed: true,
+      remaining: limitResult.remaining,
+      attempt_id: limitResult.attemptId
+    });
+  } catch (err) {
+    console.error("Pre-signup check error:", err.message);
+    res.status(500).json({ error: "Failed to check signup rate limit." });
+  }
+});
+async function handleSendVerificationEmail(req, res) {
+  try {
+    const { email } = req.body || {};
+    if (!email || !EMAIL_RE.test(email.trim())) {
+      res.status(400).json({ error: "Please enter a valid email address." });
+      return;
+    }
+    const cleanEmail = normalizeEmail(email);
+    const clientIp = getClientIp(req);
+    const limitResult = await consumeEmailRateLimit(cleanEmail, "signup_verification", clientIp);
+    if (!limitResult.allowed) {
+      res.status(429).json({
+        error: limitResult.reason || RATE_LIMIT_EXCEEDED_MESSAGE,
+        code: "email_rate_limit_exceeded",
+        action: "signup_verification",
+        limit: 3,
+        next_eligible_at: limitResult.nextEligibleAt?.toISOString(),
+        retry_after_seconds: limitResult.retryAfterSeconds
+      });
+      return;
+    }
+    try {
+      if (process.env.TEST_MODE !== "true" && process.env.NODE_ENV !== "test") {
+        const { error } = await supabaseServer.auth.resend({
+          type: "signup",
+          email: cleanEmail,
+          options: {
+            emailRedirectTo: getAppRedirectUrl(req, "/auth/callback")
+          }
+        });
+        if (error) {
+          console.warn("Supabase signup verification email note:", error.message);
+          await markEmailRateLimitError(limitResult.attemptId);
+        } else {
+          await markEmailRateLimitSuccess(limitResult.attemptId);
+        }
+      } else {
+        await markEmailRateLimitSuccess(limitResult.attemptId);
+      }
+    } catch (err) {
+      console.warn("Supabase resend exception:", err.message);
+      await markEmailRateLimitError(limitResult.attemptId);
+    }
+    res.json({
+      success: true,
+      message: "If that address is waiting for verification, a new link is on its way.",
+      action: "signup_verification",
+      remaining: limitResult.remaining
+    });
+  } catch (err) {
+    console.error("Send verification email error:", err.message);
+    res.status(500).json({ error: "Failed to dispatch verification email." });
+  }
+}
+router5.post("/send-verification-email", handleSendVerificationEmail);
+router5.post("/resend-verification", handleSendVerificationEmail);
+router5.post("/send-password-reset-link", async (req, res) => {
+  try {
+    const { email } = req.body || {};
+    if (!email || !EMAIL_RE.test(email.trim())) {
+      res.status(400).json({ error: "Please enter a valid email address." });
+      return;
+    }
+    const cleanEmail = normalizeEmail(email);
+    const clientIp = getClientIp(req);
+    const limitResult = await consumeEmailRateLimit(cleanEmail, "password_reset_link", clientIp);
+    if (!limitResult.allowed) {
+      res.status(429).json({
+        error: limitResult.reason || RATE_LIMIT_EXCEEDED_MESSAGE,
+        code: "email_rate_limit_exceeded",
+        action: "password_reset_link",
+        limit: 3,
+        next_eligible_at: limitResult.nextEligibleAt?.toISOString(),
+        retry_after_seconds: limitResult.retryAfterSeconds
+      });
+      return;
+    }
+    try {
+      if (process.env.TEST_MODE !== "true" && process.env.NODE_ENV !== "test") {
+        const { error } = await supabaseServer.auth.resetPasswordForEmail(cleanEmail, {
+          redirectTo: getAppRedirectUrl(req, "/reset-password")
+        });
+        if (error) {
+          console.warn("Supabase resetPasswordForEmail note:", error.message);
+          await markEmailRateLimitError(limitResult.attemptId);
+        } else {
+          await markEmailRateLimitSuccess(limitResult.attemptId);
+        }
+      } else {
+        await markEmailRateLimitSuccess(limitResult.attemptId);
+      }
+    } catch (err) {
+      console.warn("Supabase reset password exception:", err.message);
+      await markEmailRateLimitError(limitResult.attemptId);
+    }
+    res.json({
+      success: true,
+      message: `If an account exists for ${cleanEmail}, you'll receive a password reset link shortly.`,
+      action: "password_reset_link",
+      remaining: limitResult.remaining
+    });
+  } catch (err) {
+    console.error("Send password reset link error:", err.message);
+    res.status(500).json({ error: "Failed to dispatch password reset link." });
+  }
+});
+router5.post("/send-password-reset-otp", async (req, res) => {
+  try {
+    const { email } = req.body || {};
+    if (!email || !EMAIL_RE.test(email.trim())) {
+      res.status(400).json({ error: "Please enter a valid email address." });
+      return;
+    }
+    const cleanEmail = normalizeEmail(email);
+    const clientIp = getClientIp(req);
+    const limitResult = await consumeEmailRateLimit(cleanEmail, "password_reset_otp", clientIp);
+    if (!limitResult.allowed) {
+      res.status(429).json({
+        error: limitResult.reason || RATE_LIMIT_EXCEEDED_MESSAGE,
+        code: "email_rate_limit_exceeded",
+        action: "password_reset_otp",
+        limit: 3,
+        next_eligible_at: limitResult.nextEligibleAt?.toISOString(),
+        retry_after_seconds: limitResult.retryAfterSeconds
+      });
+      return;
+    }
+    try {
+      if (process.env.TEST_MODE !== "true" && process.env.NODE_ENV !== "test") {
+        const { error } = await supabaseServer.auth.signInWithOtp({
+          email: cleanEmail,
+          options: {
+            shouldCreateUser: false,
+            emailRedirectTo: getAppRedirectUrl(req, "/reset-password")
+          }
+        });
+        if (error) {
+          console.warn("Supabase signInWithOtp note:", error.message);
+          await markEmailRateLimitError(limitResult.attemptId);
+        } else {
+          await markEmailRateLimitSuccess(limitResult.attemptId);
+        }
+      } else {
+        await markEmailRateLimitSuccess(limitResult.attemptId);
+      }
+    } catch (err) {
+      console.warn("Supabase signInWithOtp exception:", err.message);
+      await markEmailRateLimitError(limitResult.attemptId);
+    }
+    res.json({
+      success: true,
+      message: `If an account exists for ${cleanEmail}, we sent a 6-digit recovery code to your inbox.`,
+      action: "password_reset_otp",
+      remaining: limitResult.remaining
+    });
+  } catch (err) {
+    console.error("Send password reset OTP error:", err.message);
+    res.status(500).json({ error: "Failed to dispatch password recovery code." });
+  }
+});
+router5.post("/verify-password-reset-otp", async (req, res) => {
+  try {
+    const { email, otp, new_password } = req.body || {};
+    if (!email || !otp || !new_password) {
+      res.status(400).json({ error: "Email, 6-digit recovery code, and new password are required." });
+      return;
+    }
+    const cleanEmail = normalizeEmail(email);
+    const cleanOtp = String(otp).trim();
+    if (new_password.length < 8) {
+      res.status(400).json({ error: "Password must be at least 8 characters long." });
+      return;
+    }
+    let verified = false;
+    if (process.env.TEST_MODE !== "true" && process.env.NODE_ENV !== "test") {
+      const { data, error } = await supabaseServer.auth.verifyOtp({
+        email: cleanEmail,
+        token: cleanOtp,
+        type: "recovery"
+      });
+      if (error) {
+        res.status(400).json({ error: "Invalid or expired recovery code. Please request a new code." });
+        return;
+      }
+      verified = Boolean(data.user);
+    } else {
+      if (cleanOtp !== "123456" && cleanOtp !== "654321") {
+        res.status(400).json({ error: "Invalid or expired recovery code. Please request a new code." });
+        return;
+      }
+      verified = true;
+    }
+    if (verified) {
+      const passwordHash = bcrypt.hashSync(new_password, 8);
+      await db.run(
+        `UPDATE profiles SET password_hash = ?, updated_at = ? WHERE email = ?`,
+        [passwordHash, (/* @__PURE__ */ new Date()).toISOString(), cleanEmail]
+      );
+    }
+    res.json({
+      success: true,
+      message: "Password successfully updated! You can now sign in with your new password."
+    });
+  } catch (err) {
+    console.error("Verify reset OTP error:", err.message);
+    res.status(500).json({ error: "Failed to verify recovery code." });
+  }
+});
 var auth_default = router5;
 
 // server/routes/mcp.ts
 import { Router as Router6 } from "express";
 import jwt2 from "jsonwebtoken";
-import crypto5 from "node:crypto";
+import crypto7 from "node:crypto";
 var router6 = Router6();
-var JWT_SECRET2 = process.env.JWT_SECRET || "kyron-super-secret-jwt-key-2026";
+var JWT_SECRET3 = process.env.JWT_SECRET || "kyron-super-secret-jwt-key-2026";
 var MCP_TOOLS = [
   {
     name: "ping",
@@ -3112,7 +4967,7 @@ var MCP_TOOLS = [
 function extractUserFromToken(token) {
   if (!token) return null;
   try {
-    return jwt2.verify(token, JWT_SECRET2);
+    return jwt2.verify(token, JWT_SECRET3);
   } catch {
     return null;
   }
@@ -3698,7 +5553,7 @@ router6.get("/auth", (req, res) => {
 });
 var sseSessions = /* @__PURE__ */ new Map();
 router6.get("/sse", (req, res) => {
-  const sessionId = crypto5.randomUUID();
+  const sessionId = crypto7.randomUUID();
   const user = extractUserFromRequest(req);
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache, no-transform");

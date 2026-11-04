@@ -1,16 +1,122 @@
+export interface SocialLinks {
+  website?: string;
+  linkedin?: string;
+  github?: string;
+  twitter?: string;
+  youtube?: string;
+  discord?: string;
+}
+
+export interface CreatorPortfolioItem {
+  id: string;
+  title: string;
+  description: string;
+  url?: string;
+  image_url?: string;
+}
+
+export interface NotificationPreferences {
+  email_security: boolean;
+  email_product: boolean;
+  email_marketing: boolean;
+  in_app: boolean;
+  new_ratings?: boolean;
+  skill_sales?: boolean;
+}
+
+export interface ConnectedAccount {
+  id?: string;
+  provider: 'google' | 'github' | string;
+  provider_user_id: string;
+  email?: string;
+  created_at: string;
+}
+
+export interface LoginActivityItem {
+  id: string;
+  ip_address: string;
+  user_agent: string;
+  device_type: string;
+  location: string;
+  logged_in_at: string;
+}
+
+export interface ActiveSessionItem {
+  id: string;
+  device_name: string;
+  ip_address: string;
+  last_active: string;
+  is_current: boolean;
+}
+
 export interface Profile {
   id: string;
   email: string;
   display_name: string;
   full_name?: string;
+  first_name?: string;
+  last_name?: string;
   username: string;
   bio?: string;
   avatar_url?: string;
+  cover_image_url?: string;
+  location?: string;
+  phone?: string;
+  website_url?: string;
+  social_links?: SocialLinks;
   role?: 'user' | 'creator' | 'admin' | string;
   credit_balance: number;
   is_unlimited_credit_user: number;
   created_at: string;
   updated_at?: string;
+
+  // Creator profile fields
+  creator_mode_enabled?: boolean;
+  creator_display_name?: string;
+  creator_avatar_url?: string;
+  creator_cover_image_url?: string;
+  creator_headline?: string;
+  creator_bio?: string;
+  creator_skills?: string[];
+  creator_categories?: string[];
+  creator_portfolio?: CreatorPortfolioItem[];
+  creator_links?: Record<string, string>;
+  creator_verified?: boolean;
+  creator_storefront_slug?: string;
+
+  // Role-based profile fields
+  role_type?: 'individual' | 'agency_owner' | 'agency_member' | 'client';
+  professional_title?: string;
+  skills_expertise?: string[];
+  years_experience?: number;
+  portfolio_items?: CreatorPortfolioItem[];
+  services_offered?: string[];
+  agency_name?: string;
+  agency_logo_url?: string;
+  agency_description?: string;
+  agency_website?: string;
+  agency_team_size?: string;
+  agency_designation?: string;
+  agency_permissions?: string[];
+  company_name?: string;
+  company_industry?: string;
+  company_size?: string;
+  hiring_preferences?: Record<string, any>;
+
+  // Preferences & Privacy
+  theme_preference?: 'light' | 'dark' | 'system';
+  language?: string;
+  timezone?: string;
+  notification_preferences?: NotificationPreferences;
+  profile_visibility?: 'public' | 'private';
+  discoverability?: boolean;
+  messaging_preference?: 'anyone' | 'verified' | 'none';
+  is_deactivated?: boolean;
+  deactivated_at?: string;
+
+  // Joined OAuth accounts
+  connected_accounts?: ConnectedAccount[];
+  email_verified?: boolean;
 }
 
 export interface SkillDeal {
@@ -29,7 +135,7 @@ export interface Skill {
   category: string;
   tags: string[];
   logo_url?: string;
-  pricing_type: 'free' | 'paid' | 'subscription';
+  pricing_type: 'free' | 'paid';
   price: number;
   subscription_price_monthly?: number;
   compatibility_type: string;

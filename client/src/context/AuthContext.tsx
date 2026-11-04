@@ -55,23 +55,6 @@ export type OAuthProvider = 'google' | 'github';
 
 const PROVIDER_LABELS: Record<OAuthProvider, string> = { google: 'Google', github: 'GitHub' };
 
-// Supabase publishes which providers are enabled; checking first avoids sending people to a raw error page.
-let providerSettings: Promise<Record<string, boolean> | null> | null = null;
-function loadProviderSettings(): Promise<Record<string, boolean> | null> {
-  if (!providerSettings) {
-    providerSettings = supabaseUrl && supabaseAnonKey
-      ? fetch(`${supabaseUrl}/auth/v1/settings`, { headers: { apikey: supabaseAnonKey } })
-          .then(res => (res.ok ? res.json() : null))
-          .then(data => (data?.external as Record<string, boolean>) ?? null)
-          .catch(() => null)
-      : Promise.resolve(null);
-    providerSettings.then(value => {
-      if (!value) providerSettings = null;
-    });
-  }
-  return providerSettings;
-}
-
 function toActionError(err: unknown, fallback?: string): AuthActionError {
   const e = (err || {}) as { message?: string; code?: string; next_eligible_at?: string; retry_after_seconds?: number };
   const code = e.code;
@@ -423,7 +406,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signInWithProvider = useCallback(async (provider: OAuthProvider, next?: string) => {
     const safeNext = sanitizeRedirect(next, '/dashboard');
 
-    // 1. Check if KYRON backend OAuth is configured for this provider
+    // Single unified OAuth flow: KYRON backend OAuth gateway
     try {
       const backendProviders = await api.getOAuthProviders().catch(() => null);
       if (backendProviders && backendProviders[provider]) {
@@ -433,19 +416,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     } catch {}
 
-    // 2. Check if Supabase has this provider enabled
-    const enabled = await loadProviderSettings();
-    if (enabled && enabled[provider]) {
-      const callback = safeNext ? `/auth/callback?flow=oauth&next=${encodeURIComponent(safeNext)}` : '/auth/callback?flow=oauth';
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider,
-        options: { redirectTo: authRedirectUrl(callback) }
-      });
-      if (error) throw toActionError(error, `We couldn’t start ${PROVIDER_LABELS[provider]} sign-in. Please try again.`);
-      return;
-    }
-
-    // 3. If credentials are not yet configured in environment or Supabase:
+    // If credentials are not yet configured in environment:
     throw new AuthActionError(
       `${PROVIDER_LABELS[provider]} sign-in is temporarily unavailable. Please sign in with your email and password.`,
       'provider_disabled'

@@ -136,43 +136,43 @@ html.dark .kyron-badge-verified {
 /* ================= ANIMATED KYRON LOGO KEYFRAMES ================= */
 @keyframes kyronPlateBack {
   0%, 100% {
-    transform: rotate(-21deg) translateY(0px) scale(1);
+    transform: rotate(-20deg) translateY(0px) scale(1);
   }
   50% {
-    transform: rotate(-17.5deg) translateY(-8px) scale(1.015);
+    transform: rotate(-18deg) translateY(-7px) scale(1.015);
   }
 }
 
 @keyframes kyronPlateMid {
   0%, 100% {
-    transform: rotate(15deg) translateY(0px) scale(1);
+    transform: rotate(18deg) translateY(0px) scale(1);
   }
   50% {
-    transform: rotate(18.5deg) translateY(7px) scale(0.99);
+    transform: rotate(20deg) translateY(6px) scale(0.99);
   }
 }
 
 @keyframes kyronPlateFront {
   0%, 100% {
-    transform: rotate(-6deg) translateY(0px) scale(1);
+    transform: rotate(8deg) translateY(0px) scale(1);
   }
   50% {
-    transform: rotate(-3deg) translateY(-5px) scale(1.01);
+    transform: rotate(9.5deg) translateY(-5px) scale(1.01);
   }
 }
 
 @keyframes kyronLogoFloat {
   0%, 100% {
-    transform: translateY(0px) scale(1);
+    transform: rotate(8deg) translateY(0px) scale(1);
   }
   50% {
-    transform: translateY(-4px) scale(1.015);
+    transform: rotate(8deg) translateY(-4px) scale(1.015);
   }
 }
 
 @keyframes kyronGlowPulse {
   0%, 100% {
-    opacity: 0.72;
+    opacity: 0.75;
     transform: scale(0.96);
   }
   50% {
@@ -194,7 +194,7 @@ html.dark .kyron-badge-verified {
 }
 
 .animate-kyron-logo-float {
-  animation: kyronLogoFloat 6s ease-in-out infinite;
+  animation: kyronLogoFloat 7.5s ease-in-out infinite;
 }
 
 .animate-kyron-glow-pulse {

@@ -96,7 +96,7 @@ export function App() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-bg-canvas text-text-primary antialiased">
+    <div className="min-h-screen flex flex-col bg-bg-canvas dark:bg-[#0A0A0A] text-text-primary dark:text-[#EDEDED] antialiased transition-colors duration-200">
       <Navbar />
       <main className="flex-1 flex flex-col">
         <ErrorBoundary>

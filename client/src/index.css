@@ -88,3 +88,125 @@
   color: #737373;
   border: 1px solid #E8E8E6;
 }
+
+/* ================= DARK MODE UTILITIES ================= */
+html.dark,
+html.dark body {
+  background-color: #0A0A0A;
+  color: #EDEDED;
+}
+
+html.dark * {
+  border-color: #262626;
+}
+
+html.dark ::-webkit-scrollbar-track {
+  background: #0A0A0A;
+}
+html.dark ::-webkit-scrollbar-thumb {
+  background: #262626;
+  border-radius: 4px;
+}
+html.dark ::-webkit-scrollbar-thumb:hover {
+  background: #383838;
+}
+
+html.dark .kyron-card,
+html.dark .kyron-card-hover {
+  background-color: #141414;
+  border-color: #262626;
+}
+html.dark .kyron-card-hover:hover {
+  border-color: #404040;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45);
+}
+
+html.dark .kyron-badge-neutral {
+  background-color: #1A1A1A;
+  color: #A3A3A3;
+  border-color: #2E2E2E;
+}
+
+html.dark .kyron-badge-verified {
+  background-color: rgba(249, 115, 22, 0.15);
+  color: #FB923C;
+  border-color: rgba(249, 115, 22, 0.3);
+}
+
+/* ================= ANIMATED KYRON LOGO KEYFRAMES ================= */
+@keyframes kyronPlateBack {
+  0%, 100% {
+    transform: rotate(-21deg) translateY(0px) scale(1);
+  }
+  50% {
+    transform: rotate(-17.5deg) translateY(-8px) scale(1.015);
+  }
+}
+
+@keyframes kyronPlateMid {
+  0%, 100% {
+    transform: rotate(15deg) translateY(0px) scale(1);
+  }
+  50% {
+    transform: rotate(18.5deg) translateY(7px) scale(0.99);
+  }
+}
+
+@keyframes kyronPlateFront {
+  0%, 100% {
+    transform: rotate(-6deg) translateY(0px) scale(1);
+  }
+  50% {
+    transform: rotate(-3deg) translateY(-5px) scale(1.01);
+  }
+}
+
+@keyframes kyronLogoFloat {
+  0%, 100% {
+    transform: translateY(0px) scale(1);
+  }
+  50% {
+    transform: translateY(-4px) scale(1.015);
+  }
+}
+
+@keyframes kyronGlowPulse {
+  0%, 100% {
+    opacity: 0.72;
+    transform: scale(0.96);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.06);
+  }
+}
+
+.animate-kyron-plate-back {
+  animation: kyronPlateBack 8s ease-in-out infinite;
+}
+
+.animate-kyron-plate-mid {
+  animation: kyronPlateMid 9s ease-in-out infinite;
+}
+
+.animate-kyron-plate-front {
+  animation: kyronPlateFront 7.5s ease-in-out infinite;
+}
+
+.animate-kyron-logo-float {
+  animation: kyronLogoFloat 6s ease-in-out infinite;
+}
+
+.animate-kyron-glow-pulse {
+  animation: kyronGlowPulse 7s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-kyron-plate-back,
+  .animate-kyron-plate-mid,
+  .animate-kyron-plate-front,
+  .animate-kyron-logo-float,
+  .animate-kyron-glow-pulse {
+    animation: none !important;
+  }
+}

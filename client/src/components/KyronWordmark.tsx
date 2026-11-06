@@ -16,7 +16,7 @@ export interface KyronWordmarkProps extends React.SVGProps<SVGSVGElement> {
  * - Adaptive light/dark rendering via `currentColor`
  */
 export function KyronWordmark({
-  className = 'h-5 w-auto',
+  className = 'h-5 w-auto text-[#171717] dark:text-white',
   color = 'currentColor',
   orangeColor = '#F97316',
   ...props
@@ -32,7 +32,7 @@ export function KyronWordmark({
       {...props}
     >
       {/* Letter K */}
-      <rect x="0" y="0" width="29" height="134" fill={color} />
+      <rect x="0" y="0" width="29" height="134" rx="1.5" fill={color} />
       <polygon points="105,0 142,0 74,67 142,134 105,134 29,67" fill={color} />
 
       {/* Letter Y */}
@@ -45,7 +45,7 @@ export function KyronWordmark({
         d="M 381 0 H 485 C 506 0, 513 8, 513 26 V 48 C 513 62, 504 68, 485 68 H 450 L 523 134 H 485 L 442 68 H 409 V 56 H 480 C 492 56, 496 50, 496 40 V 34 C 496 26, 492 26, 480 26 H 381 Z"
       />
       {/* Signature Accent: Vibrant orange lower-left vertical stem below the notch */}
-      <rect x="381" y="58" width="28" height="76" fill={orangeColor} />
+      <rect x="381" y="58" width="28" height="76" rx="2.5" fill={orangeColor} />
 
       {/* Letter O (Futuristic squircle) */}
       <path

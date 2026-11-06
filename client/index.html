@@ -1,10 +1,28 @@
 <!DOCTYPE html>
-<html lang="en" class="h-full bg-bg-canvas text-text-primary antialiased">
+<html lang="en" class="h-full bg-bg-canvas dark:bg-[#0A0A0A] text-text-primary dark:text-[#EDEDED] antialiased">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>KYRON // AGENTS — The Curated Registry for Autonomous Agent Skills</title>
     <meta name="description" content="Discover, benchmark, and deploy audited tools, MCP servers, and execution capabilities for Claude, OpenAI, Cursor, and LangChain with zero-knowledge sandboxing." />
+    <!-- Instant Anti-Flash Theme Initializer -->
+    <script>
+      (function() {
+        try {
+          var saved = localStorage.getItem('kyron-theme');
+          var isDark = saved === 'dark' || (saved !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          if (isDark) {
+            document.documentElement.classList.add('dark');
+            document.documentElement.classList.remove('light');
+            document.documentElement.style.colorScheme = 'dark';
+          } else {
+            document.documentElement.classList.remove('dark');
+            document.documentElement.classList.add('light');
+            document.documentElement.style.colorScheme = 'light';
+          }
+        } catch(e) {}
+      })();
+    </script>
     <!-- Fonts: Geist & JetBrains Mono -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />

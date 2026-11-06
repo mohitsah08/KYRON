@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from '../context/RouterContext.tsx';
 import { useAuth } from '../context/AuthContext.tsx';
+import { useTheme } from '../context/ThemeContext.tsx';
 import { api } from '../utils/api.ts';
 import { TeamMember, ConnectedAccount, LoginActivityItem, ActiveSessionItem } from '../types.ts';
 import { validateEmail, validatePassword } from '../utils/authHelpers.ts';
@@ -117,7 +118,7 @@ export function AccountSettingsPage() {
   // ==========================================
   // SECTION 3: PREFERENCES STATE
   // ==========================================
-  const [theme, setTheme] = useState<'light' | 'dark' | 'system'>(user?.theme_preference || 'system');
+  const { theme, setTheme } = useTheme();
   const [language, setLanguage] = useState(user?.language || 'en');
   const [timezone, setTimezone] = useState(user?.timezone || 'UTC');
   const [notifications, setNotifications] = useState({
@@ -882,8 +883,8 @@ export function AccountSettingsPage() {
                         onClick={() => setTheme(t.id as any)}
                         className={`p-3 rounded-xl border text-xs font-bold text-center transition-all ${
                           theme === t.id
-                            ? 'bg-orange-50 border-orange-300 text-[#F97316] shadow-xs'
-                            : 'bg-[#FAFAFA] border-[#EDEDEB] text-[#525252] hover:border-[#D4D4D0]'
+                            ? 'bg-orange-50 dark:bg-orange-950/40 border-orange-300 dark:border-orange-500 text-[#F97316] shadow-xs'
+                            : 'bg-[#FAFAFA] dark:bg-[#1A1A1A] border-[#EDEDEB] dark:border-[#2E2E2E] text-[#525252] dark:text-[#A3A3A3] hover:border-[#D4D4D0] dark:hover:border-[#404040]'
                         }`}
                       >
                         {t.label}

@@ -136,19 +136,19 @@ html.dark .kyron-badge-verified {
 /* ================= ANIMATED KYRON LOGO KEYFRAMES ================= */
 @keyframes kyronPlateBack {
   0%, 100% {
-    transform: rotate(-20deg) translateY(0px) scale(1);
+    transform: rotate(-20deg) translate(-28px, 14px) scale(1);
   }
   50% {
-    transform: rotate(-18deg) translateY(-7px) scale(1.015);
+    transform: rotate(-19.2deg) translate(-26px, 12px) scale(1.008);
   }
 }
 
 @keyframes kyronPlateMid {
   0%, 100% {
-    transform: rotate(18deg) translateY(0px) scale(1);
+    transform: rotate(18deg) translate(26px, -18px) scale(1);
   }
   50% {
-    transform: rotate(20deg) translateY(6px) scale(0.99);
+    transform: rotate(18.8deg) translate(24px, -16px) scale(0.995);
   }
 }
 
@@ -157,27 +157,27 @@ html.dark .kyron-badge-verified {
     transform: rotate(8deg) translateY(0px) scale(1);
   }
   50% {
-    transform: rotate(9.5deg) translateY(-5px) scale(1.01);
+    transform: rotate(8.4deg) translateY(-3px) scale(1.006);
   }
 }
 
 @keyframes kyronLogoFloat {
   0%, 100% {
-    transform: rotate(8deg) translateY(0px) scale(1);
+    transform: translateY(0px) scale(1);
   }
   50% {
-    transform: rotate(8deg) translateY(-4px) scale(1.015);
+    transform: translateY(-2.5px) scale(1.008);
   }
 }
 
 @keyframes kyronGlowPulse {
   0%, 100% {
-    opacity: 0.75;
-    transform: scale(0.96);
+    opacity: 0.78;
+    transform: scale(0.98);
   }
   50% {
-    opacity: 1;
-    transform: scale(1.06);
+    opacity: 0.98;
+    transform: scale(1.04);
   }
 }
 
@@ -186,19 +186,19 @@ html.dark .kyron-badge-verified {
 }
 
 .animate-kyron-plate-mid {
-  animation: kyronPlateMid 9s ease-in-out infinite;
+  animation: kyronPlateMid 8s ease-in-out infinite;
 }
 
 .animate-kyron-plate-front {
-  animation: kyronPlateFront 7.5s ease-in-out infinite;
+  animation: kyronPlateFront 8s ease-in-out infinite;
 }
 
 .animate-kyron-logo-float {
-  animation: kyronLogoFloat 7.5s ease-in-out infinite;
+  animation: kyronLogoFloat 8s ease-in-out infinite;
 }
 
 .animate-kyron-glow-pulse {
-  animation: kyronGlowPulse 7s ease-in-out infinite;
+  animation: kyronGlowPulse 8s ease-in-out infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {

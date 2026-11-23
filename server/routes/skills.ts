@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { db } from '../db/database.ts';
 import { optionalAuth, AuthRequest, requireAuth } from '../middleware/auth.ts';
 import { buildSkillZip, generateInstallationPrompt, TargetAgent, getAgentInstallPath } from '../services/skillPackageService.ts';
+import { installSkillForUser, InstallationError } from '../services/installationService.ts';
 import crypto from 'node:crypto';
 
 const router = Router();
@@ -172,6 +173,19 @@ router.get('/', optionalAuth, async (req: AuthRequest, res: Response) => {
     const countRow = await db.get(countSql, params) as any;
     const total = countRow ? Number(countRow.total || 0) : 0;
 
+    const userId = req.user?.id;
+    let userSelectSql = '';
+    let userJoinSql = '';
+    const userParams: any[] = [];
+
+    if (userId) {
+      userSelectSql = `, CASE WHEN up.id IS NOT NULL OR s.creator_id = ? THEN 1 ELSE 0 END as is_installed`;
+      userJoinSql = ` LEFT JOIN user_purchases up ON up.skill_id = s.id AND up.user_id = ? AND up.status = 'completed'`;
+      userParams.push(userId, userId);
+    } else {
+      userSelectSql = `, 0 as is_installed`;
+    }
+
     let querySql = `
       SELECT s.id, s.name, s.slug, s.summary, s.category, s.tags, s.logo_url,
              s.pricing_type, s.price, s.subscription_price_monthly, s.compatibility_type,
@@ -179,9 +193,11 @@ router.get('/', optionalAuth, async (req: AuthRequest, res: Response) => {
              s.net_votes, s.average_rating, s.review_count, s.created_at,
              p.display_name as creator_name, p.username as creator_username,
              d.discount_percent, d.expires_at as deal_expires_at
+             ${userSelectSql}
       FROM skills s
       JOIN profiles p ON s.creator_id = p.id
       LEFT JOIN skill_deals d ON d.skill_id = s.id AND d.is_active = 1 AND datetime(d.expires_at) > datetime('now')
+      ${userJoinSql}
       ${whereSql}
     `;
 
@@ -213,7 +229,7 @@ router.get('/', optionalAuth, async (req: AuthRequest, res: Response) => {
     }
 
     querySql += ` LIMIT ? OFFSET ?`;
-    const rows = await db.all(querySql, [...params, Number(limit), Number(offset)]) as any[];
+    const rows = await db.all(querySql, [...userParams, ...params, Number(limit), Number(offset)]) as any[];
 
     // Format tags and deals
     const formatted = rows.map(r => {
@@ -229,6 +245,7 @@ router.get('/', optionalAuth, async (req: AuthRequest, res: Response) => {
       } : null;
 
       const safePricingType = r.pricing_type === 'free' ? 'free' : 'paid';
+      const isInstalled = Boolean(r.is_installed);
 
       return {
         ...r,
@@ -240,7 +257,10 @@ router.get('/', optionalAuth, async (req: AuthRequest, res: Response) => {
         install_count: Number(r.install_count),
         view_count: Number(r.view_count),
         tags: parsedTags,
-        deal
+        deal,
+        is_installed: isInstalled,
+        is_purchased: isInstalled,
+        is_owned: isInstalled
       };
     });
 
@@ -350,11 +370,15 @@ router.get('/:slug', optionalAuth, async (req: AuthRequest, res: Response) => {
         package_tree: packageTree,
         session_preview: sessionPreview,
         deal,
-        is_owned: isOwned
+        is_owned: isOwned,
+        is_installed: isOwned,
+        is_purchased: isOwned
       },
       creator,
       deal,
       is_purchased: isOwned,
+      is_installed: isOwned,
+      is_owned: isOwned,
       reviews,
       security_audit: auditLogs
     });
@@ -410,6 +434,30 @@ async function checkSkillEntitlement(skill: any, user?: { id: string }) {
     error: 'Access denied: Purchase required. You do not have an active entitlement or license for this paid skill. Please acquire or top up credits first.'
   };
 }
+
+// Unified Skill Installation Endpoint
+router.post('/:id/install', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const skillIdOrSlug = req.params.id;
+    const userId = req.user!.id;
+    const targetAgent = (req.body?.targetAgent || req.body?.agent) as string | undefined;
+
+    const result = await installSkillForUser({
+      userId,
+      skillIdOrSlug,
+      targetAgent
+    });
+
+    res.json(result);
+  } catch (err: any) {
+    if (err instanceof InstallationError) {
+      res.status(err.status).json({ error: err.message, code: err.code });
+      return;
+    }
+    console.error('Skill installation error:', err.message);
+    res.status(500).json({ error: 'Failed to complete skill installation.' });
+  }
+});
 
 // 5. Entitlement check: Secure Skill Storage and Delivery
 router.get('/:slug/package', requireAuth, async (req: AuthRequest, res: Response) => {
@@ -492,6 +540,25 @@ router.get('/:slug/download/markdown', optionalAuth, async (req: AuthRequest, re
         `INSERT INTO skill_downloads (id, skill_id, user_id, version, download_type, downloaded_at) VALUES (?, ?, ?, ?, 'markdown', ?)`,
         [downloadId, skill.id, userId, pkg.version, now]
       );
+
+      // If user is authenticated and skill is free, ensure library installation is registered
+      if (userId && (skill.pricing_type === 'free' || Number(skill.price) === 0)) {
+        const existingPurchase = await db.get(
+          `SELECT id FROM user_purchases WHERE user_id = ? AND skill_id = ? AND status = 'completed'`,
+          [userId, skill.id]
+        );
+        if (!existingPurchase) {
+          const purchaseId = 'pur_' + crypto.randomUUID();
+          const licenseKey = 'KYRON-FREE-' + crypto.randomBytes(8).toString('hex').toUpperCase();
+          await db.run(
+            `INSERT INTO user_purchases (id, user_id, skill_id, amount_paid, license_key, purchased_at, status)
+             VALUES (?, ?, ?, 0.00, ?, ?, 'completed')
+             ON CONFLICT (id) DO NOTHING`,
+            [purchaseId, userId, skill.id, licenseKey, now]
+          );
+          await db.run(`UPDATE skills SET install_count = install_count + 1 WHERE id = ?`, [skill.id]);
+        }
+      }
     } catch {}
 
     const safeSlug = skill.slug.replace(/[^a-z0-9_-]/gi, '-');
@@ -541,6 +608,25 @@ router.get('/:slug/download/zip', optionalAuth, async (req: AuthRequest, res: Re
         `INSERT INTO skill_downloads (id, skill_id, user_id, version, download_type, downloaded_at) VALUES (?, ?, ?, ?, 'zip', ?)`,
         [downloadId, skill.id, userId, pkg.version, now]
       );
+
+      // If user is authenticated and skill is free, ensure library installation is registered
+      if (userId && (skill.pricing_type === 'free' || Number(skill.price) === 0)) {
+        const existingPurchase = await db.get(
+          `SELECT id FROM user_purchases WHERE user_id = ? AND skill_id = ? AND status = 'completed'`,
+          [userId, skill.id]
+        );
+        if (!existingPurchase) {
+          const purchaseId = 'pur_' + crypto.randomUUID();
+          const licenseKey = 'KYRON-FREE-' + crypto.randomBytes(8).toString('hex').toUpperCase();
+          await db.run(
+            `INSERT INTO user_purchases (id, user_id, skill_id, amount_paid, license_key, purchased_at, status)
+             VALUES (?, ?, ?, 0.00, ?, ?, 'completed')
+             ON CONFLICT (id) DO NOTHING`,
+            [purchaseId, userId, skill.id, licenseKey, now]
+          );
+          await db.run(`UPDATE skills SET install_count = install_count + 1 WHERE id = ?`, [skill.id]);
+        }
+      }
     } catch {}
 
     const safeSlug = skill.slug.replace(/[^a-z0-9_-]/gi, '-');

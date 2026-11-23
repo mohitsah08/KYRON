@@ -1056,8 +1056,214 @@ ${fileTreeDesc}
 `;
 }
 
-// server/routes/skills.ts
+// server/services/installationService.ts
 import crypto from "node:crypto";
+var InstallationError = class extends Error {
+  status;
+  code;
+  constructor(message, status = 400, code = "INSTALLATION_FAILED") {
+    super(message);
+    this.name = "InstallationError";
+    this.status = status;
+    this.code = code;
+  }
+};
+async function installSkillForUser(params) {
+  const { userId, skillIdOrSlug } = params;
+  if (!userId) {
+    throw new InstallationError("Authentication required to install skills.", 401, "AUTH_REQUIRED");
+  }
+  if (!skillIdOrSlug) {
+    throw new InstallationError("Skill identifier (ID or slug) is required.", 400, "INVALID_SKILL_ID");
+  }
+  const skill = await db.get(
+    `SELECT id, name, slug, price, pricing_type, creator_id, current_version, status 
+     FROM skills 
+     WHERE id = ? OR slug = ?`,
+    [skillIdOrSlug, skillIdOrSlug]
+  );
+  if (!skill) {
+    throw new InstallationError("Skill not found.", 404, "SKILL_NOT_FOUND");
+  }
+  if (skill.status !== "live" && skill.status !== "published") {
+    const isCreator = skill.creator_id === userId;
+    let isAdmin = false;
+    if (!isCreator) {
+      const profile = await db.get(`SELECT is_unlimited_credit_user FROM profiles WHERE id = ?`, [userId]);
+      isAdmin = profile?.is_unlimited_credit_user === 1;
+    }
+    if (!isCreator && !isAdmin) {
+      throw new InstallationError("Skill is not publicly available for installation.", 403, "SKILL_NOT_AVAILABLE");
+    }
+  }
+  const existing = await db.get(
+    `SELECT id, license_key, purchased_at FROM user_purchases WHERE user_id = ? AND skill_id = ? AND status = 'completed'`,
+    [userId, skill.id]
+  );
+  const pkg = await db.get(
+    `SELECT version, skill_md_content, files_json FROM skill_packages WHERE skill_id = ?`,
+    [skill.id]
+  );
+  let filesMap = {};
+  if (pkg?.files_json) {
+    try {
+      filesMap = JSON.parse(pkg.files_json);
+    } catch {
+    }
+  }
+  const hasSupportingFiles = Object.keys(filesMap).filter((k) => k !== "SKILL.md").length > 0;
+  const version = pkg?.version || skill.current_version || "1.0.0";
+  if (existing) {
+    return {
+      success: true,
+      status: "already_installed",
+      is_installed: true,
+      message: `Skill "${skill.name}" is already installed in your workspace library.`,
+      license_key: existing.license_key,
+      purchase: {
+        id: existing.id,
+        skill_id: skill.id,
+        amount_paid: Number(existing.amount_paid || 0),
+        license_key: existing.license_key
+      },
+      skill: {
+        id: skill.id,
+        name: skill.name,
+        slug: skill.slug,
+        current_version: version
+      },
+      package: {
+        version,
+        download_url: `/api/skills/${skill.slug}/download/zip`,
+        has_supporting_files: hasSupportingFiles
+      }
+    };
+  }
+  let skillMdContent = pkg?.skill_md_content;
+  if (!skillMdContent) {
+    skillMdContent = convertPlainMarkdownToSkill(
+      skill.description || `# ${skill.name}
+
+${skill.summary || ""}`,
+      skill.slug || skill.name.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+      skill.summary || skill.description || skill.name
+    );
+  } else {
+    const validation = validateSkillMd(skillMdContent);
+    if (!validation.valid) {
+      skillMdContent = convertPlainMarkdownToSkill(
+        skillMdContent,
+        skill.slug || skill.name.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+        skill.summary || skill.description || skill.name
+      );
+    }
+  }
+  const isPaid = skill.pricing_type === "paid" && Number(skill.price) > 0;
+  let effectivePrice = isPaid ? Number(skill.price) : 0;
+  if (isPaid) {
+    const deal = await db.get(
+      `SELECT discount_percent FROM skill_deals WHERE skill_id = ? AND is_active = 1 AND datetime(expires_at) > datetime('now')`,
+      [skill.id]
+    );
+    if (deal?.discount_percent) {
+      effectivePrice = Number((effectivePrice * (1 - Number(deal.discount_percent) / 100)).toFixed(2));
+    }
+  }
+  const result = await db.withTransaction(async (tx) => {
+    const raceCheck = await tx.get(
+      `SELECT id, license_key FROM user_purchases WHERE user_id = ? AND skill_id = ? AND status = 'completed'`,
+      [userId, skill.id]
+    );
+    if (raceCheck) {
+      return {
+        alreadyOwned: true,
+        license_key: raceCheck.license_key
+      };
+    }
+    if (isPaid && effectivePrice > 0) {
+      const profile = await tx.get(
+        `SELECT credit_balance, is_unlimited_credit_user FROM profiles WHERE id = ?`,
+        [userId]
+      );
+      if (!profile) {
+        throw new InstallationError("User profile not found.", 404, "USER_NOT_FOUND");
+      }
+      const isAdmin = profile.is_unlimited_credit_user === 1;
+      const currentBalance = Number(profile.credit_balance || 0);
+      if (!isAdmin && currentBalance < effectivePrice) {
+        throw new InstallationError(
+          `Insufficient credit balance. You have $${currentBalance.toFixed(2)}, but this skill costs $${effectivePrice.toFixed(2)}. Top up to continue.`,
+          402,
+          "INSUFFICIENT_CREDITS"
+        );
+      }
+      if (!isAdmin) {
+        const updateRes = await tx.run(
+          `UPDATE profiles SET credit_balance = credit_balance - ? WHERE id = ? AND credit_balance >= ?`,
+          [effectivePrice, userId, effectivePrice]
+        );
+        if (updateRes.changes === 0) {
+          throw new InstallationError("Concurrent balance update detected. Please retry.", 409, "CONCURRENT_MODIFICATION");
+        }
+      }
+    }
+    const purchaseId = "pur_" + crypto.randomUUID();
+    const licenseKey = "KYRON-" + (isPaid ? "LIC-" : "FREE-") + crypto.randomBytes(8).toString("hex").toUpperCase();
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    await tx.run(
+      `INSERT INTO user_purchases (id, user_id, skill_id, amount_paid, license_key, purchased_at, status)
+       VALUES (?, ?, ?, ?, ?, ?, 'completed')
+       ON CONFLICT (id) DO NOTHING`,
+      [purchaseId, userId, skill.id, effectivePrice, licenseKey, now]
+    );
+    await tx.run(`UPDATE skills SET install_count = install_count + 1 WHERE id = ?`, [skill.id]);
+    const downloadId = "dl_" + crypto.randomUUID();
+    await tx.run(
+      `INSERT INTO skill_downloads (id, skill_id, user_id, version, download_type, downloaded_at)
+       VALUES (?, ?, ?, ?, 'zip', ?)`,
+      [downloadId, skill.id, userId, version, now]
+    );
+    return {
+      alreadyOwned: false,
+      license_key: licenseKey,
+      purchaseId
+    };
+  });
+  const verification = await db.get(
+    `SELECT id FROM user_purchases WHERE user_id = ? AND skill_id = ? AND status = 'completed'`,
+    [userId, skill.id]
+  );
+  if (!verification) {
+    throw new InstallationError("Installation verification failed. Database record was not confirmed.", 500, "VERIFICATION_FAILED");
+  }
+  return {
+    success: true,
+    status: result.alreadyOwned ? "already_installed" : "installed",
+    is_installed: true,
+    message: result.alreadyOwned ? `Skill "${skill.name}" is already in your workspace library.` : `Skill "${skill.name}" successfully installed to your workspace library!`,
+    license_key: result.license_key,
+    purchase: {
+      id: result.purchaseId || verification.id,
+      skill_id: skill.id,
+      amount_paid: effectivePrice,
+      license_key: result.license_key
+    },
+    skill: {
+      id: skill.id,
+      name: skill.name,
+      slug: skill.slug,
+      current_version: version
+    },
+    package: {
+      version,
+      download_url: `/api/skills/${skill.slug}/download/zip`,
+      has_supporting_files: hasSupportingFiles
+    }
+  };
+}
+
+// server/routes/skills.ts
+import crypto2 from "node:crypto";
 var router = Router();
 var CATEGORIES = [
   // Business
@@ -1202,6 +1408,17 @@ router.get("/", optionalAuth, async (req, res) => {
     `;
     const countRow = await db.get(countSql, params);
     const total = countRow ? Number(countRow.total || 0) : 0;
+    const userId = req.user?.id;
+    let userSelectSql = "";
+    let userJoinSql = "";
+    const userParams = [];
+    if (userId) {
+      userSelectSql = `, CASE WHEN up.id IS NOT NULL OR s.creator_id = ? THEN 1 ELSE 0 END as is_installed`;
+      userJoinSql = ` LEFT JOIN user_purchases up ON up.skill_id = s.id AND up.user_id = ? AND up.status = 'completed'`;
+      userParams.push(userId, userId);
+    } else {
+      userSelectSql = `, 0 as is_installed`;
+    }
     let querySql = `
       SELECT s.id, s.name, s.slug, s.summary, s.category, s.tags, s.logo_url,
              s.pricing_type, s.price, s.subscription_price_monthly, s.compatibility_type,
@@ -1209,9 +1426,11 @@ router.get("/", optionalAuth, async (req, res) => {
              s.net_votes, s.average_rating, s.review_count, s.created_at,
              p.display_name as creator_name, p.username as creator_username,
              d.discount_percent, d.expires_at as deal_expires_at
+             ${userSelectSql}
       FROM skills s
       JOIN profiles p ON s.creator_id = p.id
       LEFT JOIN skill_deals d ON d.skill_id = s.id AND d.is_active = 1 AND datetime(d.expires_at) > datetime('now')
+      ${userJoinSql}
       ${whereSql}
     `;
     switch (sort) {
@@ -1240,7 +1459,7 @@ router.get("/", optionalAuth, async (req, res) => {
         break;
     }
     querySql += ` LIMIT ? OFFSET ?`;
-    const rows = await db.all(querySql, [...params, Number(limit), Number(offset)]);
+    const rows = await db.all(querySql, [...userParams, ...params, Number(limit), Number(offset)]);
     const formatted = rows.map((r) => {
       let parsedTags = [];
       try {
@@ -1253,6 +1472,7 @@ router.get("/", optionalAuth, async (req, res) => {
         discounted_price: Number((Number(r.price) * (1 - Number(r.discount_percent) / 100)).toFixed(2))
       } : null;
       const safePricingType = r.pricing_type === "free" ? "free" : "paid";
+      const isInstalled = Boolean(r.is_installed);
       return {
         ...r,
         pricing_type: safePricingType,
@@ -1263,7 +1483,10 @@ router.get("/", optionalAuth, async (req, res) => {
         install_count: Number(r.install_count),
         view_count: Number(r.view_count),
         tags: parsedTags,
-        deal
+        deal,
+        is_installed: isInstalled,
+        is_purchased: isInstalled,
+        is_owned: isInstalled
       };
     });
     res.json({ skills: formatted, count: formatted.length, total });
@@ -1361,11 +1584,15 @@ router.get("/:slug", optionalAuth, async (req, res) => {
         package_tree: packageTree,
         session_preview: sessionPreview,
         deal,
-        is_owned: isOwned
+        is_owned: isOwned,
+        is_installed: isOwned,
+        is_purchased: isOwned
       },
       creator,
       deal,
       is_purchased: isOwned,
+      is_installed: isOwned,
+      is_owned: isOwned,
       reviews,
       security_audit: auditLogs
     });
@@ -1411,6 +1638,26 @@ async function checkSkillEntitlement(skill, user) {
     error: "Access denied: Purchase required. You do not have an active entitlement or license for this paid skill. Please acquire or top up credits first."
   };
 }
+router.post("/:id/install", requireAuth, async (req, res) => {
+  try {
+    const skillIdOrSlug = req.params.id;
+    const userId = req.user.id;
+    const targetAgent = req.body?.targetAgent || req.body?.agent;
+    const result = await installSkillForUser({
+      userId,
+      skillIdOrSlug,
+      targetAgent
+    });
+    res.json(result);
+  } catch (err) {
+    if (err instanceof InstallationError) {
+      res.status(err.status).json({ error: err.message, code: err.code });
+      return;
+    }
+    console.error("Skill installation error:", err.message);
+    res.status(500).json({ error: "Failed to complete skill installation." });
+  }
+});
 router.get("/:slug/package", requireAuth, async (req, res) => {
   try {
     const { slug } = req.params;
@@ -1470,7 +1717,7 @@ router.get("/:slug/download/markdown", optionalAuth, async (req, res) => {
       res.status(404).json({ error: "Skill package contents unavailable." });
       return;
     }
-    const downloadId = "dl_" + crypto.randomUUID();
+    const downloadId = "dl_" + crypto2.randomUUID();
     const userId = req.user ? req.user.id : null;
     const now = (/* @__PURE__ */ new Date()).toISOString();
     try {
@@ -1478,6 +1725,23 @@ router.get("/:slug/download/markdown", optionalAuth, async (req, res) => {
         `INSERT INTO skill_downloads (id, skill_id, user_id, version, download_type, downloaded_at) VALUES (?, ?, ?, ?, 'markdown', ?)`,
         [downloadId, skill.id, userId, pkg.version, now]
       );
+      if (userId && (skill.pricing_type === "free" || Number(skill.price) === 0)) {
+        const existingPurchase = await db.get(
+          `SELECT id FROM user_purchases WHERE user_id = ? AND skill_id = ? AND status = 'completed'`,
+          [userId, skill.id]
+        );
+        if (!existingPurchase) {
+          const purchaseId = "pur_" + crypto2.randomUUID();
+          const licenseKey = "KYRON-FREE-" + crypto2.randomBytes(8).toString("hex").toUpperCase();
+          await db.run(
+            `INSERT INTO user_purchases (id, user_id, skill_id, amount_paid, license_key, purchased_at, status)
+             VALUES (?, ?, ?, 0.00, ?, ?, 'completed')
+             ON CONFLICT (id) DO NOTHING`,
+            [purchaseId, userId, skill.id, licenseKey, now]
+          );
+          await db.run(`UPDATE skills SET install_count = install_count + 1 WHERE id = ?`, [skill.id]);
+        }
+      }
     } catch {
     }
     const safeSlug = skill.slug.replace(/[^a-z0-9_-]/gi, "-");
@@ -1513,7 +1777,7 @@ router.get("/:slug/download/zip", optionalAuth, async (req, res) => {
     } catch {
     }
     const zipBuffer = await buildSkillZip(skill.slug, pkg.skill_md_content, filesMap);
-    const downloadId = "dl_" + crypto.randomUUID();
+    const downloadId = "dl_" + crypto2.randomUUID();
     const userId = req.user ? req.user.id : null;
     const now = (/* @__PURE__ */ new Date()).toISOString();
     try {
@@ -1521,6 +1785,23 @@ router.get("/:slug/download/zip", optionalAuth, async (req, res) => {
         `INSERT INTO skill_downloads (id, skill_id, user_id, version, download_type, downloaded_at) VALUES (?, ?, ?, ?, 'zip', ?)`,
         [downloadId, skill.id, userId, pkg.version, now]
       );
+      if (userId && (skill.pricing_type === "free" || Number(skill.price) === 0)) {
+        const existingPurchase = await db.get(
+          `SELECT id FROM user_purchases WHERE user_id = ? AND skill_id = ? AND status = 'completed'`,
+          [userId, skill.id]
+        );
+        if (!existingPurchase) {
+          const purchaseId = "pur_" + crypto2.randomUUID();
+          const licenseKey = "KYRON-FREE-" + crypto2.randomBytes(8).toString("hex").toUpperCase();
+          await db.run(
+            `INSERT INTO user_purchases (id, user_id, skill_id, amount_paid, license_key, purchased_at, status)
+             VALUES (?, ?, ?, 0.00, ?, ?, 'completed')
+             ON CONFLICT (id) DO NOTHING`,
+            [purchaseId, userId, skill.id, licenseKey, now]
+          );
+          await db.run(`UPDATE skills SET install_count = install_count + 1 WHERE id = ?`, [skill.id]);
+        }
+      }
     } catch {
     }
     const safeSlug = skill.slug.replace(/[^a-z0-9_-]/gi, "-");
@@ -1567,7 +1848,7 @@ router.get("/:slug/prompt", optionalAuth, async (req, res) => {
       hasSupportingFiles,
       fileList
     });
-    const downloadId = "dl_" + crypto.randomUUID();
+    const downloadId = "dl_" + crypto2.randomUUID();
     const userId = req.user ? req.user.id : null;
     const now = (/* @__PURE__ */ new Date()).toISOString();
     try {
@@ -1678,55 +1959,28 @@ var votes_default = router2;
 
 // server/routes/purchases.ts
 import { Router as Router3 } from "express";
-import crypto2 from "node:crypto";
+import crypto3 from "node:crypto";
 var router3 = Router3();
-router3.post("/free", requireAuth, async (req, res) => {
+router3.post(["/free", "/install"], requireAuth, async (req, res) => {
   try {
     const skillId = req.body.skillId || req.body.skill_id;
     const userId = req.user.id;
+    const targetAgent = req.body?.targetAgent || req.body?.agent;
     if (!skillId) {
       res.status(400).json({ error: "skillId is required" });
       return;
     }
-    const result = await db.withTransaction(async (tx) => {
-      const skill = await tx.get(`SELECT id, name, price, pricing_type FROM skills WHERE id = ?`, [skillId]);
-      if (!skill) {
-        return { errorStatus: 404, error: "Skill not found" };
-      }
-      if (skill.pricing_type !== "free" && Number(skill.price) > 0) {
-        return { errorStatus: 400, error: "This is a paid skill and cannot be installed for free." };
-      }
-      const existing = await tx.get(`SELECT id, license_key FROM user_purchases WHERE user_id = ? AND skill_id = ?`, [userId, skill.id]);
-      if (existing) {
-        return {
-          success: true,
-          status: "already_owned",
-          message: "You already have this skill in your library.",
-          license_key: existing.license_key
-        };
-      }
-      const purchaseId = "pur_" + crypto2.randomUUID();
-      const licenseKey = "KYRON-FREE-" + crypto2.randomBytes(8).toString("hex").toUpperCase();
-      const now = (/* @__PURE__ */ new Date()).toISOString();
-      await tx.run(`
-        INSERT INTO user_purchases (id, user_id, skill_id, amount_paid, license_key, purchased_at, status)
-        VALUES (?, ?, ?, 0.00, ?, ?, 'completed')
-        ON CONFLICT (id) DO NOTHING
-      `, [purchaseId, userId, skill.id, licenseKey, now]);
-      await tx.run(`UPDATE skills SET install_count = install_count + 1 WHERE id = ?`, [skill.id]);
-      return {
-        success: true,
-        status: "installed",
-        message: `Skill "${skill.name}" successfully added to your agent library!`,
-        license_key: licenseKey
-      };
+    const result = await installSkillForUser({
+      userId,
+      skillIdOrSlug: skillId,
+      targetAgent
     });
-    if ("errorStatus" in result) {
-      res.status(result.errorStatus).json({ error: result.error });
-      return;
-    }
     res.json(result);
   } catch (err) {
+    if (err instanceof InstallationError) {
+      res.status(err.status).json({ error: err.message, code: err.code });
+      return;
+    }
     console.error("Free install error:", err.message);
     res.status(500).json({ error: "Failed to complete skill installation." });
   }
@@ -1786,8 +2040,8 @@ router3.post(["/credit", "/buy-with-credit"], requireAuth, async (req, res) => {
           throw new Error("Concurrent modification detected during balance debit. Please retry.");
         }
       }
-      const purchaseId = "pur_" + crypto2.randomUUID();
-      const licenseKey = "KYRON-LIC-" + crypto2.randomBytes(8).toString("hex").toUpperCase();
+      const purchaseId = "pur_" + crypto3.randomUUID();
+      const licenseKey = "KYRON-LIC-" + crypto3.randomBytes(8).toString("hex").toUpperCase();
       const now = (/* @__PURE__ */ new Date()).toISOString();
       await tx.run(`
         INSERT INTO user_purchases (id, user_id, skill_id, amount_paid, license_key, purchased_at, status)
@@ -2213,7 +2467,7 @@ var SecurityScanner = class {
 };
 
 // server/routes/creator.ts
-import crypto3 from "node:crypto";
+import crypto4 from "node:crypto";
 var router4 = Router4();
 router4.get("/skills", requireAuth, async (req, res) => {
   try {
@@ -2393,7 +2647,7 @@ router4.post("/publish", requireAuth, async (req, res) => {
     if (!existingSkill) {
       const existingOtherSlug = await db.get(`SELECT id FROM skills WHERE slug = ?`, [requestedSlug]);
       if (existingOtherSlug) {
-        slug = `${requestedSlug}-${crypto3.randomBytes(3).toString("hex")}`;
+        slug = `${requestedSlug}-${crypto4.randomBytes(3).toString("hex")}`;
       }
     }
     const mdVal = validateSkillMd(skill_md_content);
@@ -2402,14 +2656,14 @@ router4.post("/publish", requireAuth, async (req, res) => {
       finalSkillMd = convertPlainMarkdownToSkill(skill_md_content, slug, summary);
     }
     const scanResult = SecurityScanner.scanPackage(finalSkillMd, files);
-    const skillId = existingSkill ? existingSkill.id : "skl_" + crypto3.randomUUID();
+    const skillId = existingSkill ? existingSkill.id : "skl_" + crypto4.randomUUID();
     const now = (/* @__PURE__ */ new Date()).toISOString();
     for (const check of scanResult.results) {
       await db.run(`
         INSERT INTO security_audit_logs (id, skill_id, rule_name, status, details, scanned_at)
         VALUES (?, ?, ?, ?, ?, ?)
         ON CONFLICT (id) DO NOTHING
-      `, ["log_" + crypto3.randomUUID(), skillId, check.ruleName, check.status, check.details || check.description, now]);
+      `, ["log_" + crypto4.randomUUID(), skillId, check.ruleName, check.status, check.details || check.description, now]);
     }
     if (!is_draft && scanResult.overallStatus !== "pass") {
       res.status(422).json({
@@ -2440,12 +2694,12 @@ router4.post("/publish", requireAuth, async (req, res) => {
       let username = req.user?.username || `user_${creatorId.slice(0, 8)}`;
       const takenUser = await db.get(`SELECT id FROM profiles WHERE username = ?`, [username]);
       if (takenUser && takenUser.id !== creatorId) {
-        username = `${username}_${crypto3.randomBytes(3).toString("hex")}`;
+        username = `${username}_${crypto4.randomBytes(3).toString("hex")}`;
       }
       let email = req.user?.email || `${creatorId}@kyron.local`;
       const takenEmail = await db.get(`SELECT id FROM profiles WHERE email = ?`, [email]);
       if (takenEmail && takenEmail.id !== creatorId) {
-        email = `${creatorId}_${crypto3.randomBytes(3).toString("hex")}@kyron.local`;
+        email = `${creatorId}_${crypto4.randomBytes(3).toString("hex")}@kyron.local`;
       }
       const displayName = req.user?.displayName || req.user?.username || username;
       try {
@@ -2832,7 +3086,7 @@ router4.post("/skills/:id/submit", requireAuth, async (req, res) => {
       });
       return;
     }
-    const submissionId = "sub_" + crypto3.randomUUID();
+    const submissionId = "sub_" + crypto4.randomUUID();
     const now = (/* @__PURE__ */ new Date()).toISOString();
     const versionNumber = pkg.version || skill.current_version || "1.0.0";
     await db.run(`
@@ -3014,7 +3268,7 @@ router4.post("/skills/:id/versions", requireAuth, async (req, res) => {
       res.status(404).json({ error: "Skill not found or access denied." });
       return;
     }
-    const versionId = "ver_" + crypto3.randomUUID();
+    const versionId = "ver_" + crypto4.randomUUID();
     const now = (/* @__PURE__ */ new Date()).toISOString();
     await db.run(`
       INSERT INTO skill_versions (id, skill_id, version_number, changelog, file_manifest, created_at)
@@ -3167,7 +3421,7 @@ var creator_default = router4;
 import { Router as Router5 } from "express";
 
 // server/services/emailRateLimiter.ts
-import crypto4 from "node:crypto";
+import crypto5 from "node:crypto";
 var VALID_AUTH_EMAIL_ACTIONS = [
   "signup_verification",
   "password_reset_link",
@@ -3182,7 +3436,7 @@ function normalizeEmail(email) {
   return (email || "").trim().toLowerCase();
 }
 function hashEmail(normalizedEmail) {
-  return crypto4.createHash("sha256").update(normalizedEmail).digest("hex");
+  return crypto5.createHash("sha256").update(normalizedEmail).digest("hex");
 }
 async function consumeEmailRateLimit(rawEmail, action, ipAddress) {
   const normalized = normalizeEmail(rawEmail);
@@ -3214,7 +3468,7 @@ async function consumeEmailRateLimit(rawEmail, action, ipAddress) {
       );
       const ipCount = Number(ipRows[0]?.count || 0);
       if (ipCount >= IP_RATE_LIMIT_MAX) {
-        const blockedId = "rat_ip_" + crypto4.randomUUID();
+        const blockedId = "rat_ip_" + crypto5.randomUUID();
         await tx.run(
           `INSERT INTO auth_email_rate_limits (id, email_hash, action, ip_address, outcome, created_at, created_at_ms)
            VALUES (?, ?, ?, ?, 'ip_blocked', ?, ?)`,
@@ -3250,7 +3504,7 @@ async function consumeEmailRateLimit(rawEmail, action, ipAddress) {
       const nextEligibleMs = oldestMs + EMAIL_RATE_LIMIT_WINDOW_MS;
       const retryAfterSeconds = Math.max(1, Math.ceil((nextEligibleMs - now) / 1e3));
       const nextEligibleDate = new Date(nextEligibleMs);
-      const blockedId = "rat_blk_" + crypto4.randomUUID();
+      const blockedId = "rat_blk_" + crypto5.randomUUID();
       await tx.run(
         `INSERT INTO auth_email_rate_limits (id, email_hash, action, ip_address, outcome, created_at, created_at_ms)
          VALUES (?, ?, ?, ?, 'rate_limited', ?, ?)`,
@@ -3277,7 +3531,7 @@ async function consumeEmailRateLimit(rawEmail, action, ipAddress) {
         message: RATE_LIMIT_EXCEEDED_MESSAGE
       };
     }
-    const attemptId = "rat_" + crypto4.randomUUID();
+    const attemptId = "rat_" + crypto5.randomUUID();
     await tx.run(
       `INSERT INTO auth_email_rate_limits (id, email_hash, action, ip_address, outcome, created_at, created_at_ms)
        VALUES (?, ?, ?, ?, 'attempt', ?, ?)`,
@@ -3361,10 +3615,10 @@ async function markEmailRateLimitError(attemptId) {
 
 // server/routes/auth.ts
 import bcrypt from "bcryptjs";
-import crypto6 from "node:crypto";
+import crypto7 from "node:crypto";
 
 // server/services/oauthService.ts
-import crypto5 from "node:crypto";
+import crypto6 from "node:crypto";
 var JWT_SECRET2 = process.env.JWT_SECRET || "kyron-super-secret-jwt-key-2026";
 function getOAuthStatus() {
   return {
@@ -3406,11 +3660,11 @@ function sanitizeNextPath(next) {
   return decoded;
 }
 function createOAuthState(provider, next) {
-  const nonce = crypto5.randomBytes(16).toString("hex");
+  const nonce = crypto6.randomBytes(16).toString("hex");
   const issuedAt = Date.now();
   const safeNext = sanitizeNextPath(next);
   const dataToSign = `${nonce}:${provider}:${issuedAt}:${safeNext}`;
-  const sig = crypto5.createHmac("sha256", JWT_SECRET2).update(dataToSign).digest("hex");
+  const sig = crypto6.createHmac("sha256", JWT_SECRET2).update(dataToSign).digest("hex");
   const payload = {
     nonce,
     provider,
@@ -3442,8 +3696,8 @@ function verifyOAuthState(stateStr, expectedProvider) {
   if (isNaN(ageMs) || ageMs < 0 || ageMs > 15 * 60 * 1e3) {
     return { valid: false, next: sanitizeNextPath(next), error: "OAuth state has expired. Please try again." };
   }
-  const expectedSig = crypto5.createHmac("sha256", JWT_SECRET2).update(`${nonce}:${provider}:${issuedAt}:${next}`).digest("hex");
-  if (!crypto5.timingSafeEqual(Buffer.from(sig, "hex"), Buffer.from(expectedSig, "hex"))) {
+  const expectedSig = crypto6.createHmac("sha256", JWT_SECRET2).update(`${nonce}:${provider}:${issuedAt}:${next}`).digest("hex");
+  if (!crypto6.timingSafeEqual(Buffer.from(sig, "hex"), Buffer.from(expectedSig, "hex"))) {
     return { valid: false, next: "/dashboard", error: "Invalid OAuth state signature" };
   }
   return { valid: true, next: sanitizeNextPath(next) };
@@ -3668,7 +3922,7 @@ async function syncOAuthAccount(profile) {
           `This email is already registered, but your ${profile.provider === "github" ? "GitHub" : "Google"} email address is not verified. Please verify your email on ${profile.provider === "github" ? "GitHub" : "Google"} or sign in with your email and password.`
         );
       }
-      const linkId2 = "oacc_" + crypto5.randomUUID();
+      const linkId2 = "oacc_" + crypto6.randomUUID();
       try {
         await db.run(
           `INSERT INTO oauth_accounts (id, user_id, provider, provider_user_id, email, created_at)
@@ -3693,17 +3947,17 @@ async function syncOAuthAccount(profile) {
       };
     }
   }
-  const userId = "usr_" + crypto5.randomUUID();
+  const userId = "usr_" + crypto6.randomUUID();
   let candidateUsername = (profile.username || profile.displayName || profile.email.split("@")[0]).toLowerCase().replace(/[^a-z0-9_]+/g, "_").slice(0, 20);
   if (candidateUsername.length < 3) {
-    candidateUsername = `${candidateUsername}_${crypto5.randomBytes(2).toString("hex")}`;
+    candidateUsername = `${candidateUsername}_${crypto6.randomBytes(2).toString("hex")}`;
   }
   let finalUsername = candidateUsername;
   let attempts = 0;
   while (attempts < 5) {
     const taken = await db.get(`SELECT id FROM profiles WHERE username = ?`, [finalUsername]);
     if (!taken) break;
-    finalUsername = `${candidateUsername.slice(0, 18)}_${crypto5.randomBytes(2).toString("hex")}`;
+    finalUsername = `${candidateUsername.slice(0, 18)}_${crypto6.randomBytes(2).toString("hex")}`;
     attempts++;
   }
   const welcomeCredit = 10;
@@ -3746,7 +4000,7 @@ async function syncOAuthAccount(profile) {
       ]
     );
   }
-  const linkId = "oacc_" + crypto5.randomUUID();
+  const linkId = "oacc_" + crypto6.randomUUID();
   await db.run(
     `INSERT INTO oauth_accounts (id, user_id, provider, provider_user_id, email, created_at)
      VALUES (?, ?, ?, ?, ?, ?)`,
@@ -3830,8 +4084,8 @@ router5.post("/register", async (req, res) => {
       res.status(409).json({ error: "An account with this email already exists." });
       return;
     }
-    const userId = "usr_" + crypto6.randomUUID();
-    const username = display_name.toLowerCase().replace(/[^a-z0-9]+/g, "_").slice(0, 30) + "_" + crypto6.randomBytes(2).toString("hex");
+    const userId = "usr_" + crypto7.randomUUID();
+    const username = display_name.toLowerCase().replace(/[^a-z0-9]+/g, "_").slice(0, 30) + "_" + crypto7.randomBytes(2).toString("hex");
     const passwordHash = bcrypt.hashSync(password, 8);
     const now = (/* @__PURE__ */ new Date()).toISOString();
     await db.run(`
@@ -4442,7 +4696,7 @@ router5.get("/security/activity", requireAuth, async (req, res) => {
       [userId]
     );
     if (sessions.length === 0) {
-      const sessionId = "ses_" + crypto6.randomUUID();
+      const sessionId = "ses_" + crypto7.randomUUID();
       const now = (/* @__PURE__ */ new Date()).toISOString();
       const ip = req.headers["x-forwarded-for"]?.toString().split(",")[0].trim() || req.socket.remoteAddress || "127.0.0.1";
       const userAgent = req.headers["user-agent"] || "Chrome / macOS";
@@ -4454,7 +4708,7 @@ router5.get("/security/activity", requireAuth, async (req, res) => {
       await db.run(`
         INSERT INTO login_activity (id, user_id, ip_address, user_agent, device_type, location, logged_in_at)
         VALUES (?, ?, ?, ?, ?, 'Local Workspace (Verified)', ?)
-      `, ["act_" + crypto6.randomUUID(), userId, ip, userAgent, deviceName, now]);
+      `, ["act_" + crypto7.randomUUID(), userId, ip, userAgent, deviceName, now]);
       activities = await db.all(`SELECT * FROM login_activity WHERE user_id = ? ORDER BY logged_in_at DESC LIMIT 10`, [userId]);
       sessions = await db.all(`SELECT * FROM active_sessions WHERE user_id = ? ORDER BY last_active DESC`, [userId]);
     }
@@ -4940,7 +5194,7 @@ var auth_default = router5;
 // server/routes/mcp.ts
 import { Router as Router6 } from "express";
 import jwt2 from "jsonwebtoken";
-import crypto7 from "node:crypto";
+import crypto8 from "node:crypto";
 var router6 = Router6();
 var JWT_SECRET3 = process.env.JWT_SECRET || "kyron-super-secret-jwt-key-2026";
 var MCP_TOOLS = [
@@ -5540,7 +5794,7 @@ ${skill.description}`;
           }
           if (context.user?.id) {
             const latencyMs = Math.max(1, Date.now() - execStart);
-            const execId = `exec_${crypto7.randomUUID()}`;
+            const execId = `exec_${crypto8.randomUUID()}`;
             const executedAt = (/* @__PURE__ */ new Date()).toISOString();
             try {
               await db.run(`
@@ -5626,7 +5880,7 @@ router6.get("/auth", (req, res) => {
 });
 var sseSessions = /* @__PURE__ */ new Map();
 router6.get("/sse", (req, res) => {
-  const sessionId = crypto7.randomUUID();
+  const sessionId = crypto8.randomUUID();
   const user = extractUserFromRequest(req);
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache, no-transform");
@@ -5692,13 +5946,13 @@ var mcp_default = router6;
 
 // server/routes/dashboard.ts
 import { Router as Router7 } from "express";
-import crypto8 from "node:crypto";
+import crypto9 from "node:crypto";
 var router7 = Router7();
 function generateApiKey() {
-  const randomBytes = crypto8.randomBytes(24).toString("hex");
+  const randomBytes = crypto9.randomBytes(24).toString("hex");
   const key = `ky_live_${randomBytes}`;
   const prefix = `ky_live_${randomBytes.slice(0, 6)}`;
-  const hash = crypto8.createHash("sha256").update(key).digest("hex");
+  const hash = crypto9.createHash("sha256").update(key).digest("hex");
   return { key, prefix, hash };
 }
 router7.get("/", requireAuth, async (req, res) => {
@@ -5860,7 +6114,7 @@ router7.post("/executions", requireAuth, async (req, res) => {
       res.status(400).json({ error: "Missing required fields: skill_name, command, and valid latency_ms." });
       return;
     }
-    const executionId = `exec_${crypto8.randomUUID()}`;
+    const executionId = `exec_${crypto9.randomUUID()}`;
     const executedAt = (/* @__PURE__ */ new Date()).toISOString();
     const payloadJson = payload ? JSON.stringify(payload) : null;
     await db.run(`
@@ -5919,7 +6173,7 @@ router7.post("/api-keys", requireAuth, async (req, res) => {
     const { name } = req.body;
     const trimmedName = name && typeof name === "string" ? name.trim().slice(0, 80) : "Personal API Key";
     const { key, prefix, hash } = generateApiKey();
-    const keyId = `key_${crypto8.randomUUID()}`;
+    const keyId = `key_${crypto9.randomUUID()}`;
     const createdAt = (/* @__PURE__ */ new Date()).toISOString();
     await db.run(`
       INSERT INTO api_keys (id, user_id, name, key_prefix, key_hash, created_at)

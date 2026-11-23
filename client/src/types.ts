@@ -162,6 +162,9 @@ export interface Skill {
   deal_discount_percent?: number;
   user_vote?: number;
   is_saved?: boolean;
+  is_installed?: boolean;
+  is_owned?: boolean;
+  is_purchased?: boolean;
   invocation_count?: number;
   last_invoked_at?: string;
 }

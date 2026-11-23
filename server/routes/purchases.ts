@@ -1,70 +1,35 @@
 import { Router, Response } from 'express';
 import { db } from '../db/database.ts';
 import { requireAuth, AuthRequest } from '../middleware/auth.ts';
+import { installSkillForUser, InstallationError } from '../services/installationService.ts';
 import crypto from 'node:crypto';
 
 const router = Router();
 
-// 1. 1-Click Free Skill Acquisition
-router.post('/free', requireAuth, async (req: AuthRequest, res: Response) => {
+// 1. Unified 1-Click Free Skill Acquisition & Workspace Installation
+router.post(['/free', '/install'], requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const skillId = req.body.skillId || req.body.skill_id;
     const userId = req.user!.id;
+    const targetAgent = (req.body?.targetAgent || req.body?.agent) as string | undefined;
 
     if (!skillId) {
       res.status(400).json({ error: 'skillId is required' });
       return;
     }
 
-    const result = await db.withTransaction(async (tx) => {
-      const skill = await tx.get(`SELECT id, name, price, pricing_type FROM skills WHERE id = ?`, [skillId]) as any;
-
-      if (!skill) {
-        return { errorStatus: 404, error: 'Skill not found' };
-      }
-
-      if (skill.pricing_type !== 'free' && Number(skill.price) > 0) {
-        return { errorStatus: 400, error: 'This is a paid skill and cannot be installed for free.' };
-      }
-
-      // Check if already owned
-      const existing = await tx.get(`SELECT id, license_key FROM user_purchases WHERE user_id = ? AND skill_id = ?`, [userId, skill.id]) as any;
-      if (existing) {
-        return {
-          success: true,
-          status: 'already_owned',
-          message: 'You already have this skill in your library.',
-          license_key: existing.license_key
-        };
-      }
-
-      const purchaseId = 'pur_' + crypto.randomUUID();
-      const licenseKey = 'KYRON-FREE-' + crypto.randomBytes(8).toString('hex').toUpperCase();
-      const now = new Date().toISOString();
-
-      await tx.run(`
-        INSERT INTO user_purchases (id, user_id, skill_id, amount_paid, license_key, purchased_at, status)
-        VALUES (?, ?, ?, 0.00, ?, ?, 'completed')
-        ON CONFLICT (id) DO NOTHING
-      `, [purchaseId, userId, skill.id, licenseKey, now]);
-
-      await tx.run(`UPDATE skills SET install_count = install_count + 1 WHERE id = ?`, [skill.id]);
-
-      return {
-        success: true,
-        status: 'installed',
-        message: `Skill "${skill.name}" successfully added to your agent library!`,
-        license_key: licenseKey
-      };
+    const result = await installSkillForUser({
+      userId,
+      skillIdOrSlug: skillId,
+      targetAgent
     });
-
-    if ('errorStatus' in result) {
-      res.status(result.errorStatus).json({ error: result.error });
-      return;
-    }
 
     res.json(result);
   } catch (err: any) {
+    if (err instanceof InstallationError) {
+      res.status(err.status).json({ error: err.message, code: err.code });
+      return;
+    }
     console.error('Free install error:', err.message);
     res.status(500).json({ error: 'Failed to complete skill installation.' });
   }

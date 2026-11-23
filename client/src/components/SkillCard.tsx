@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Skill } from '../types.ts';
-import { useRouter, Link } from '../context/RouterContext.tsx';
+import { useRouter } from '../context/RouterContext.tsx';
 import { useAuth } from '../context/AuthContext.tsx';
+import { useInstalledSkills } from '../context/InstalledSkillsContext.tsx';
 import { loginPathFor } from '../utils/authHelpers.ts';
-import { api } from '../utils/api.ts';
-import { Check, Download, ArrowRight, Star, ShieldCheck, Terminal } from 'lucide-react';
+import { Check, Download, Star, Loader2, RotateCw } from 'lucide-react';
 
 interface SkillCardProps {
   skill: Skill;
@@ -13,12 +13,20 @@ interface SkillCardProps {
 
 export function SkillCard({ skill, onInstalled }: SkillCardProps) {
   const { navigate } = useRouter();
-  const { user, refreshUser, setIsCreditModalOpen } = useAuth();
-  const [installing, setInstalling] = useState(false);
-  const [installed, setInstalled] = useState(false);
+  const { user, setIsCreditModalOpen } = useAuth();
+  const {
+    isSkillInstalled,
+    isSkillInstalling,
+    getSkillError,
+    installSkill
+  } = useInstalledSkills();
 
   const isPaid = skill.pricing_type === 'paid' && Number(skill.price) > 0;
   const isFree = !isPaid;
+
+  const isInstalled = isSkillInstalled(skill.id, skill.slug) || Boolean(skill.is_installed) || Boolean(skill.is_owned);
+  const isInstalling = isSkillInstalling(skill.id, skill.slug);
+  const installError = getSkillError(skill.id, skill.slug);
 
   // Derive latency estimate from skill ID or metadata
   const latencyMs = skill.slug.includes('octocode') ? 340 : skill.slug.includes('geo') ? 420 : 38;
@@ -32,33 +40,24 @@ export function SkillCard({ skill, onInstalled }: SkillCardProps) {
       return;
     }
 
-    if (isFree) {
-      setInstalling(true);
-      try {
-        await api.installFreeSkill(skill.id);
-        setInstalled(true);
-        if (onInstalled) onInstalled();
-      } catch (err) {
-        console.warn('Install failed:', err);
-      } finally {
-        setInstalling(false);
-      }
-    } else {
+    if (isInstalled) {
+      // Already installed; clicking navigates to details page
+      navigate(`/skills/${skill.slug}`);
+      return;
+    }
+
+    if (isPaid) {
       if (user.credit_balance < skill.price && user.is_unlimited_credit_user !== 1) {
         setIsCreditModalOpen(true);
         return;
       }
-      setInstalling(true);
-      try {
-        await api.purchaseWithCredit(skill.id);
-        await refreshUser();
-        setInstalled(true);
-        if (onInstalled) onInstalled();
-      } catch (err) {
-        console.warn('Purchase failed:', err);
-      } finally {
-        setInstalling(false);
-      }
+    }
+
+    try {
+      await installSkill(skill);
+      if (onInstalled) onInstalled();
+    } catch (err: any) {
+      console.warn('Skill installation notice:', err.message);
     }
   };
 
@@ -140,30 +139,38 @@ export function SkillCard({ skill, onInstalled }: SkillCardProps) {
           </div>
         </div>
 
-        {/* Action Button */}
+        {/* Action Button: States: Get Skill | Installing... | Installed | Retry */}
         <div>
-          {installed ? (
+          {isInstalling ? (
+            <button
+              disabled
+              onClick={(e) => e.stopPropagation()}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-[#F8F8F7] dark:bg-[#1F1F1F] border border-[#E8E8E6] dark:border-[#2E2E2E] text-[#737373] dark:text-[#A3A3A3] cursor-wait"
+            >
+              <Loader2 className="w-3 h-3 animate-spin text-[#F97316]" />
+              <span>Installing...</span>
+            </button>
+          ) : isInstalled ? (
             <span className="inline-flex items-center gap-1 text-xs font-medium text-[#15803D] dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800">
               <Check className="w-3 h-3" />
               <span>Installed</span>
             </span>
+          ) : installError ? (
+            <button
+              onClick={handleQuickInstall}
+              title={installError}
+              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/50 transition-all active:scale-[0.98]"
+            >
+              <RotateCw className="w-3 h-3" />
+              <span>Retry</span>
+            </button>
           ) : (
             <button
               onClick={handleQuickInstall}
-              disabled={installing}
               className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-white dark:bg-[#1F1F1F] hover:bg-[#F8F8F7] dark:hover:bg-[#282828] border border-[#E8E8E6] dark:border-[#2E2E2E] hover:border-[#D4D4D0] text-[#171717] dark:text-white transition-all group-hover:border-[#F97316]/40 group-hover:text-[#F97316] active:scale-[0.98]"
             >
-              {isFree ? (
-                <>
-                  <Download className="w-3 h-3" />
-                  <span>{installing ? 'Installing...' : 'Get Skill'}</span>
-                </>
-              ) : (
-                <>
-                  <Download className="w-3 h-3" />
-                  <span>{installing ? 'Purchasing...' : 'Buy Skill'}</span>
-                </>
-              )}
+              <Download className="w-3 h-3" />
+              <span>{isFree ? 'Get Skill' : 'Buy Skill'}</span>
             </button>
           )}
         </div>

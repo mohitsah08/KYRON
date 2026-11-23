@@ -138,6 +138,31 @@ export const api = {
   },
 
   // Purchases & Credits
+  async installSkill(skillId: string, options?: { targetAgent?: string }): Promise<{
+    success: boolean;
+    status: 'installed' | 'already_installed';
+    is_installed: boolean;
+    message: string;
+    license_key: string;
+    purchase?: UserPurchase;
+    skill: {
+      id: string;
+      name: string;
+      slug: string;
+      current_version: string;
+    };
+    package: {
+      version: string;
+      download_url: string;
+      has_supporting_files: boolean;
+    };
+  }> {
+    return request(`/api/skills/${skillId}/install`, {
+      method: 'POST',
+      body: JSON.stringify(options || {})
+    });
+  },
+
   async installFreeSkill(skillId: string): Promise<{ success: boolean; message: string; purchase: UserPurchase }> {
     return request('/api/purchases/free', {
       method: 'POST',
@@ -178,7 +203,7 @@ export const api = {
     });
   },
 
-  async getMyLibrary(): Promise<{ purchases: UserPurchase[] }> {
+  async getMyLibrary(): Promise<{ purchases: UserPurchase[]; library: UserPurchase[]; count: number }> {
     return request('/api/purchases/library');
   },
 

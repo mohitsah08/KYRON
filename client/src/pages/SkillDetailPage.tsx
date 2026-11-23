@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter, Link } from '../context/RouterContext.tsx';
 import { useAuth } from '../context/AuthContext.tsx';
+import { useInstalledSkills } from '../context/InstalledSkillsContext.tsx';
 import { loginPathFor } from '../utils/authHelpers.ts';
 import { api } from '../utils/api.ts';
 import { Skill, Profile, SkillDeal, SecurityAuditRule, SkillReview, UserPurchase } from '../types.ts';
@@ -24,7 +25,9 @@ import {
   ArrowRight,
   AlertTriangle,
   Bot,
-  Info
+  Info,
+  Loader2,
+  RotateCw
 } from 'lucide-react';
 
 type TargetAgent = 'claude' | 'codex' | 'cursor' | 'antigravity' | 'generic';
@@ -138,7 +141,19 @@ export function SkillDetailPage({ slug }: { slug: string }) {
   const isPaid = skill.pricing_type === 'paid' && Number(skill.price) > 0;
   const isFree = !isPaid;
   const isCreator = user ? user.id === skill.creator_id : false;
-  const isUnlocked = isFree || is_purchased || isCreator;
+
+  const {
+    isSkillInstalled,
+    isSkillInstalling,
+    getSkillError,
+    installSkill,
+    markSkillInstalled
+  } = useInstalledSkills();
+
+  const isInstalled = isSkillInstalled(skill.id, skill.slug) || Boolean(is_purchased) || Boolean(skill.is_owned) || isCreator;
+  const isInstalling = isSkillInstalling(skill.id, skill.slug) || actionLoading;
+  const installError = getSkillError(skill.id, skill.slug);
+  const isUnlocked = isInstalled || isFree;
   const effectivePrice = deal ? skill.price * (1 - deal.discount_percent / 100) : skill.price;
 
   const currentAgentInfo = AGENT_OPTIONS.find(a => a.id === selectedAgent) || AGENT_OPTIONS[4];
@@ -155,6 +170,12 @@ export function SkillDetailPage({ slug }: { slug: string }) {
     navigator.clipboard.writeText(targetInstallPath);
     setCopiedPath(true);
     setTimeout(() => setCopiedPath(false), 2000);
+  };
+
+  const handleDirectDownload = (type: 'zip' | 'md' | 'prompt') => {
+    if (user) {
+      markSkillInstalled(skill.id, skill.slug);
+    }
   };
 
   const handleVote = async () => {
@@ -197,34 +218,21 @@ export function SkillDetailPage({ slug }: { slug: string }) {
       return;
     }
 
-    if (isFree) {
-      setActionLoading(true);
-      try {
-        await api.installFreeSkill(skill.id);
-        setActionMessage('Skill unlocked! You can now download the ZIP, Markdown, and prompt.');
-        await fetchSkillData();
-      } catch (err: any) {
-        setActionMessage(`Error: ${err.message}`);
-      } finally {
-        setActionLoading(false);
-      }
-    } else {
-      if (user.credit_balance < effectivePrice && user.is_unlimited_credit_user !== 1) {
-        setIsCreditModalOpen(true);
-        return;
-      }
+    if (isPaid && user.credit_balance < effectivePrice && user.is_unlimited_credit_user !== 1) {
+      setIsCreditModalOpen(true);
+      return;
+    }
 
-      setActionLoading(true);
-      try {
-        await api.purchaseWithCredit(skill.id);
-        await refreshUser();
-        setActionMessage('Purchase completed! Package download & agent prompt unlocked.');
-        await fetchSkillData();
-      } catch (err: any) {
-        setActionMessage(`Error: ${err.message}`);
-      } finally {
-        setActionLoading(false);
-      }
+    setActionLoading(true);
+    setActionMessage(null);
+    try {
+      const res = await installSkill(skill, selectedAgent);
+      setActionMessage(res.message || 'Skill successfully installed and package downloaded!');
+      await fetchSkillData();
+    } catch (err: any) {
+      setActionMessage(`Error: ${err.message}`);
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -695,24 +703,49 @@ export function SkillDetailPage({ slug }: { slug: string }) {
                 </div>
               )}
 
-              {/* Primary Action Button */}
-              {!isUnlocked ? (
+              {/* Primary Action Button: States: Get Skill | Installing... | Installed | Retry */}
+              {isInstalling ? (
+                <button
+                  disabled
+                  className="w-full h-11 bg-[#F8F8F7] dark:bg-[#1F1F1F] border border-[#E8E8E6] dark:border-[#2E2E2E] text-[#737373] dark:text-[#A3A3A3] font-medium text-xs rounded-lg flex items-center justify-center gap-2 cursor-wait"
+                >
+                  <Loader2 className="w-4 h-4 animate-spin text-[#F97316]" />
+                  <span>Installing Package to Workspace...</span>
+                </button>
+              ) : !isInstalled ? (
                 <button
                   onClick={handleAcquire}
-                  disabled={actionLoading}
-                  className="w-full h-11 bg-[#F97316] hover:bg-[#EA580C] text-white font-medium text-xs rounded-lg flex items-center justify-center gap-2 transition-all active:scale-[0.99] disabled:opacity-50"
+                  disabled={isInstalling}
+                  className={`w-full h-11 font-medium text-xs rounded-lg flex items-center justify-center gap-2 transition-all active:scale-[0.99] ${
+                    installError
+                      ? 'bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-100'
+                      : 'bg-[#F97316] hover:bg-[#EA580C] text-white'
+                  }`}
                 >
-                  <Lock className="w-4 h-4" />
-                  <span>
-                    {actionLoading
-                      ? 'Processing...'
-                      : `Purchase & Unlock ($${effectivePrice.toFixed(2)})`}
-                  </span>
+                  {installError ? (
+                    <>
+                      <RotateCw className="w-4 h-4" />
+                      <span>Retry Installation</span>
+                    </>
+                  ) : isFree ? (
+                    <>
+                      <Download className="w-4 h-4" />
+                      <span>Get Skill</span>
+                    </>
+                  ) : (
+                    <>
+                      <Lock className="w-4 h-4" />
+                      <span>{`Purchase & Install ($${effectivePrice.toFixed(2)})`}</span>
+                    </>
+                  )}
                 </button>
               ) : (
-                <div className="p-3 bg-emerald-50/70 border border-emerald-200 rounded-lg flex items-center gap-2 text-xs text-[#15803D] font-medium">
-                  <CheckCircle2 className="w-4 h-4 shrink-0" />
-                  <span>{isCreator ? 'You are the creator of this skill' : 'Authorized for download'}</span>
+                <div className="p-3 bg-emerald-50/70 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-lg flex items-center justify-between text-xs text-[#15803D] dark:text-emerald-400 font-medium">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 shrink-0" />
+                    <span>{isCreator ? 'You are the creator of this skill' : 'Installed in Workspace Library'}</span>
+                  </div>
+                  <span className="text-[10px] font-mono bg-emerald-100 dark:bg-emerald-900/60 px-1.5 py-0.5 rounded text-emerald-800 dark:text-emerald-300">Active</span>
                 </div>
               )}
 
@@ -768,6 +801,8 @@ export function SkillDetailPage({ slug }: { slug: string }) {
                       if (!isUnlocked) {
                         e.preventDefault();
                         handleAcquire();
+                      } else {
+                        handleDirectDownload('md');
                       }
                     }}
                     className={`py-2 px-2.5 border rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-colors ${
@@ -787,6 +822,8 @@ export function SkillDetailPage({ slug }: { slug: string }) {
                       if (!isUnlocked) {
                         e.preventDefault();
                         handleAcquire();
+                      } else {
+                        handleDirectDownload('zip');
                       }
                     }}
                     className={`py-2 px-2.5 border rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-colors ${
@@ -807,6 +844,8 @@ export function SkillDetailPage({ slug }: { slug: string }) {
                     if (!isUnlocked) {
                       e.preventDefault();
                       handleAcquire();
+                    } else {
+                      handleDirectDownload('prompt');
                     }
                   }}
                   className={`w-full py-2 border rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-colors ${

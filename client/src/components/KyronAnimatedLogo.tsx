@@ -38,7 +38,7 @@ export function KyronAnimatedLogo({
         {/* ================= LAYER 1: BACK PLATE (Tilted ~-20°) ================= */}
         <div
           aria-hidden="true"
-          className="absolute w-[280px] sm:w-[350px] md:w-[410px] h-[190px] sm:h-[240px] md:h-[280px] rounded-[32px] sm:rounded-[40px] md:rounded-[48px] bg-gradient-to-br from-[#FED7AA]/50 via-[#FDBA74]/35 to-[#FFEDD5]/20 dark:from-[#1D0C04]/80 dark:via-[#130702]/70 dark:to-[#0A0401]/85 backdrop-blur-md border border-[#FDBA74]/50 dark:border-[#F97316]/50 shadow-[0_20px_50px_-10px_rgba(249,115,22,0.22)] dark:shadow-[0_0_45px_rgba(249,115,22,0.35),inset_0_1px_2px_rgba(255,255,255,0.1)] animate-kyron-plate-back transition-colors duration-300 pointer-events-none"
+          className="absolute w-[280px] sm:w-[350px] md:w-[410px] h-[190px] sm:h-[240px] md:h-[280px] rounded-[32px] sm:rounded-[40px] md:rounded-[48px] bg-gradient-to-br from-[#FED7AA]/55 via-[#FDBA74]/35 to-[#FFEDD5]/20 dark:from-[#1D0C04]/80 dark:via-[#130702]/70 dark:to-[#0A0401]/85 backdrop-blur-md border border-[#FDBA74]/50 dark:border-[#F97316]/60 shadow-[0_20px_50px_-10px_rgba(249,115,22,0.25)] dark:shadow-[0_0_45px_rgba(249,115,22,0.35),inset_0_1px_2px_rgba(255,255,255,0.1)] animate-kyron-plate-back transition-colors duration-300 pointer-events-none"
           style={{ willChange: 'transform' }}
         >
           {/* Subtle specular sheen */}
@@ -48,21 +48,24 @@ export function KyronAnimatedLogo({
         {/* ================= LAYER 2: MIDDLE PLATE (Tilted ~+18°) ================= */}
         <div
           aria-hidden="true"
-          className="absolute w-[255px] sm:w-[325px] md:w-[380px] h-[175px] sm:h-[220px] md:h-[255px] rounded-[28px] sm:rounded-[36px] md:rounded-[42px] bg-gradient-to-tr from-white/60 via-[#FFEDD5]/40 to-[#FED7AA]/30 dark:from-[#240F05]/85 dark:via-[#170902]/75 dark:to-[#0E0502]/85 backdrop-blur-lg border-2 border-[#FB923C]/70 dark:border-2 dark:border-[#F97316]/80 shadow-[0_20px_50px_-10px_rgba(249,115,22,0.25)] dark:shadow-[0_0_45px_rgba(249,115,22,0.45),inset_0_1px_2px_rgba(251,146,60,0.3)] animate-kyron-plate-mid transition-colors duration-300 pointer-events-none"
+          className="absolute w-[255px] sm:w-[325px] md:w-[380px] h-[175px] sm:h-[220px] md:h-[255px] rounded-[28px] sm:rounded-[36px] md:rounded-[42px] bg-gradient-to-tr from-white/70 via-[#FFEDD5]/45 to-[#FED7AA]/35 dark:from-[#240F05]/85 dark:via-[#170902]/75 dark:to-[#0E0502]/85 backdrop-blur-lg border-2 border-[#FB923C]/75 dark:border-2 dark:border-[#F97316]/85 shadow-[0_22px_55px_-10px_rgba(249,115,22,0.28)] dark:shadow-[0_0_50px_rgba(249,115,22,0.45),inset_0_1px_2px_rgba(251,146,60,0.3)] animate-kyron-plate-mid transition-colors duration-300 pointer-events-none overflow-hidden"
           style={{ willChange: 'transform' }}
         >
-          {/* Internal glass highlight */}
+          {/* Glass specular curved highlight on top right */}
+          <div className="absolute -top-12 -right-12 w-48 h-48 rounded-full bg-gradient-to-b from-white/80 via-white/25 to-transparent dark:from-[#FB923C]/35 dark:to-transparent pointer-events-none blur-[0.5px]" />
           <div className="absolute top-0 left-0 right-0 h-1/2 rounded-t-[28px] sm:rounded-t-[36px] md:rounded-t-[42px] bg-gradient-to-b from-white/40 dark:from-[#FB923C]/20 to-transparent pointer-events-none" />
         </div>
 
         {/* ================= LAYER 3: FRONT PLATE (Tilted ~+8°) ================= */}
         <div
           aria-hidden="true"
-          className="absolute w-[230px] sm:w-[295px] md:w-[345px] h-[160px] sm:h-[200px] md:h-[235px] rounded-[24px] sm:rounded-[32px] md:rounded-[38px] bg-gradient-to-br from-white/80 via-[#FFF7ED]/70 to-[#FED7AA]/50 dark:from-[#2A1206]/85 dark:via-[#1A0B03]/80 dark:to-[#110602]/85 backdrop-blur-xl border border-white/90 border-b-2 border-r-2 border-b-[#F97316] border-r-[#FB923C]/80 dark:border-2 dark:border-[#F97316] shadow-[0_25px_60px_-10px_rgba(249,115,22,0.35),0_8px_25px_rgba(0,0,0,0.06)] dark:shadow-[0_0_50px_rgba(249,115,22,0.6),inset_0_1px_2px_rgba(255,255,255,0.25)] animate-kyron-plate-front transition-colors duration-300 pointer-events-none"
+          className="absolute w-[230px] sm:w-[295px] md:w-[345px] h-[160px] sm:h-[200px] md:h-[235px] rounded-[24px] sm:rounded-[32px] md:rounded-[38px] bg-gradient-to-br from-white/85 via-[#FFF7ED]/75 to-[#FED7AA]/55 dark:from-[#2A1206]/85 dark:via-[#1A0B03]/80 dark:to-[#110602]/85 backdrop-blur-xl border border-white/95 border-b-[3px] border-r-[3px] border-b-[#F97316] border-r-[#FB923C] dark:border-2 dark:border-[#F97316] shadow-[0_25px_65px_-10px_rgba(249,115,22,0.4),0_8px_25px_rgba(0,0,0,0.06)] dark:shadow-[0_0_55px_rgba(249,115,22,0.65),inset_0_1px_2px_rgba(255,255,255,0.25)] animate-kyron-plate-front transition-colors duration-300 pointer-events-none"
           style={{ willChange: 'transform' }}
         >
           {/* Glossy top bevel reflection */}
-          <div className="absolute inset-x-3 top-0 h-[1.5px] bg-gradient-to-r from-transparent via-white dark:via-[#FDBA74] to-transparent opacity-80" />
+          <div className="absolute inset-x-3 top-0 h-[2px] bg-gradient-to-r from-transparent via-white dark:via-[#FDBA74] to-transparent opacity-90" />
+          {/* Luminous orange edge glow at bottom */}
+          <div className="absolute bottom-0 inset-x-6 h-[2px] bg-gradient-to-r from-transparent via-[#F97316] to-[#FB923C] blur-[1px] opacity-85" />
         </div>
 
         {/* ================= CENTRAL SYMBOL: KYRON 3D EMBLEM ================= */}

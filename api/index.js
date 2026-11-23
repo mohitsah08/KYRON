@@ -4614,8 +4614,11 @@ router5.get("/oauth/:provider/callback", async (req, res) => {
     );
   } catch (err) {
     console.error(`OAuth callback processing error for ${provider}:`, err.message);
+    const rawMsg = err.message || "";
+    const isInternalNetworkError = /ENOTFOUND|ECONNREFUSED|ETIMEDOUT|getaddrinfo|database|postgres/i.test(rawMsg);
+    const safeErrorDesc = isInternalNetworkError ? "Unable to connect to the authentication service. Please check your connection or try again shortly." : rawMsg || "OAuth authentication failed";
     res.redirect(
-      `/auth/callback?flow=oauth&error=auth_failed&error_description=${encodeURIComponent(err.message || "OAuth authentication failed")}&next=${encodeURIComponent(stateCheck.next)}`
+      `/auth/callback?flow=oauth&error=auth_failed&error_description=${encodeURIComponent(safeErrorDesc)}&next=${encodeURIComponent(stateCheck.next)}`
     );
   }
 });
@@ -4643,7 +4646,10 @@ router5.post("/oauth/:provider/callback", async (req, res) => {
     res.json({ user, token });
   } catch (err) {
     console.error(`OAuth POST callback error for ${provider}:`, err.message);
-    res.status(400).json({ error: err.message || "OAuth authentication failed" });
+    const rawMsg = err.message || "";
+    const isInternalNetworkError = /ENOTFOUND|ECONNREFUSED|ETIMEDOUT|getaddrinfo|database|postgres/i.test(rawMsg);
+    const safeError = isInternalNetworkError ? "Unable to connect to the authentication service. Please try again shortly." : rawMsg || "OAuth authentication failed";
+    res.status(400).json({ error: safeError });
   }
 });
 function getClientIp(req) {

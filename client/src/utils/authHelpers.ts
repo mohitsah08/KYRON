@@ -137,7 +137,16 @@ export function friendlyAuthError(err: unknown, fallback = 'Something went wrong
   if (msg.includes('database error saving new user')) {
     return 'We couldn’t create your profile. Please try a different username or try again shortly.';
   }
-  if (msg.includes('failed to fetch') || msg.includes('network') || e.name === 'AuthRetryableFetchError' || e.status === 0) {
+  if (
+    msg.includes('failed to fetch') ||
+    msg.includes('network') ||
+    msg.includes('enotfound') ||
+    msg.includes('econnrefused') ||
+    msg.includes('etimedout') ||
+    msg.includes('getaddrinfo') ||
+    e.name === 'AuthRetryableFetchError' ||
+    e.status === 0
+  ) {
     return 'We couldn’t reach the authentication service. Check your connection and try again.';
   }
   if (e.status && e.status >= 500) {
